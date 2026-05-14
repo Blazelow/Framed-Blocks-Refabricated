@@ -1,0 +1,68 @@
+package xfacthd.framedblocks.client.data.ghost;
+
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.context.BlockPlaceContext;
+import net.minecraft.world.level.block.state.BlockState;
+import xfacthd.framedblocks.client.model.compat.ModelData;
+import xfacthd.framedblocks.client.model.compat.ModelProperty;
+import org.jetbrains.annotations.Nullable;
+import xfacthd.framedblocks.api.block.blockentity.IFramedDoubleBlockEntity;
+import xfacthd.framedblocks.common.FBContent;
+import xfacthd.framedblocks.common.blockentity.doubled.slab.FramedAdjustableDoubleBlockEntity;
+import xfacthd.framedblocks.common.blockentity.special.FramedCollapsibleBlockEntity;
+import xfacthd.framedblocks.common.blockentity.special.FramedCollapsibleCopycatBlockEntity;
+import xfacthd.framedblocks.common.data.component.AdjustableDoubleBlockData;
+
+import java.util.Objects;
+
+public final class AdjustableDoubleBlockGhostRenderBehaviour extends DoubleBlockGhostRenderBehaviour
+{
+    private final ModelProperty<Integer> offsetProperty;
+    private final FramedAdjustableDoubleBlockEntity.OffsetPacker offsetPacker;
+
+    private AdjustableDoubleBlockGhostRenderBehaviour(
+            ModelProperty<Integer> offsetProperty,
+            FramedAdjustableDoubleBlockEntity.OffsetPacker offsetPacker
+    )
+    {
+        this.offsetProperty = offsetProperty;
+        this.offsetPacker = offsetPacker;
+    }
+
+    @Override
+    public ModelData appendModelData(ItemStack stack, @Nullable ItemStack proxiedStack, BlockPlaceContext ctx, BlockState renderState, int renderPass, ModelData data)
+    {
+        AdjustableDoubleBlockData blockData = stack.get(FBContent.DC_TYPE_ADJ_DOUBLE_BLOCK_DATA);
+        int firstHeight = blockData != null ? blockData.firstHeight() : FramedAdjustableDoubleBlockEntity.CENTER_PART_HEIGHT;
+        int offsetsLeft = offsetPacker.pack(renderState, firstHeight, false);
+        int offsetsRight = offsetPacker.pack(renderState, firstHeight, true);
+
+        ModelData dataLeft = Objects.requireNonNullElse(data.get(IFramedDoubleBlockEntity.DATA_ONE), ModelData.EMPTY)
+                .derive()
+                .with(offsetProperty, offsetsLeft)
+                .build();
+        ModelData dataRight = Objects.requireNonNullElse(data.get(IFramedDoubleBlockEntity.DATA_TWO), ModelData.EMPTY)
+                .derive()
+                .with(offsetProperty, offsetsRight)
+                .build();
+        return data.derive().with(IFramedDoubleBlockEntity.DATA_ONE, dataLeft).with(IFramedDoubleBlockEntity.DATA_TWO, dataRight).build();
+    }
+
+
+
+    public static AdjustableDoubleBlockGhostRenderBehaviour standard()
+    {
+        return new AdjustableDoubleBlockGhostRenderBehaviour(
+                FramedCollapsibleBlockEntity.OFFSETS,
+                FramedAdjustableDoubleBlockEntity::getPackedOffsetsStandard
+        );
+    }
+
+    public static AdjustableDoubleBlockGhostRenderBehaviour copycat()
+    {
+        return new AdjustableDoubleBlockGhostRenderBehaviour(
+                FramedCollapsibleCopycatBlockEntity.OFFSETS,
+                FramedAdjustableDoubleBlockEntity::getPackedOffsetsCopycat
+        );
+    }
+}

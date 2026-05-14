@@ -1,0 +1,69 @@
+package xfacthd.framedblocks.common.compat.rei;
+
+import me.shedaniel.math.Rectangle;
+import me.shedaniel.rei.api.client.plugins.REIClientPlugin;
+import me.shedaniel.rei.api.client.registry.category.CategoryRegistry;
+import me.shedaniel.rei.api.client.registry.display.DisplayRegistry;
+import me.shedaniel.rei.api.client.registry.screen.ExclusionZones;
+import me.shedaniel.rei.api.client.registry.screen.ScreenRegistry;
+import me.shedaniel.rei.api.client.registry.transfer.TransferHandlerRegistry;
+import me.shedaniel.rei.api.common.util.EntryStacks;
+import me.shedaniel.rei.forge.REIPluginClient;
+import net.minecraft.resources.ResourceLocation;
+import xfacthd.framedblocks.api.util.Utils;
+import xfacthd.framedblocks.client.screen.FramingSawWithEncoderScreen;
+import xfacthd.framedblocks.client.screen.PoweredFramingSawScreen;
+import xfacthd.framedblocks.common.FBContent;
+
+@REIPluginClient
+public final class FramedReiPlugin implements REIClientPlugin
+{
+    public static final ResourceLocation SAW_ID = Utils.rl("framing_saw");
+
+    @Override
+    public void registerCategories(CategoryRegistry registry)
+    {
+        registry.add(new FramingSawRecipeCategory());
+        registry.addWorkstations(
+                FramingSawRecipeCategory.SAW_CATEGORY,
+                EntryStacks.of(FBContent.BLOCK_FRAMING_SAW.value()),
+                EntryStacks.of(FBContent.BLOCK_POWERED_FRAMING_SAW.value())
+        );
+    }
+
+    @Override
+    public void registerDisplays(DisplayRegistry registry)
+    {
+        registry.registerDisplayGenerator(FramingSawRecipeCategory.SAW_CATEGORY, new FramingSawDisplayGenerator());
+    }
+
+    @Override
+    public void registerTransferHandlers(TransferHandlerRegistry registry)
+    {
+        registry.register(new FramingSawTransferHandler());
+    }
+
+    @Override
+    public void registerScreens(ScreenRegistry registry)
+    {
+        registry.registerDraggableStackVisitor(new FramingSawDraggableStackVisitor());
+        registry.registerDraggableStackVisitor(new PoweredFramingSawDraggableStackVisitor());
+        registry.registerContainerClickArea(
+                new Rectangle(
+                        PoweredFramingSawScreen.PROGRESS_X,
+                        PoweredFramingSawScreen.PROGRESS_Y,
+                        PoweredFramingSawScreen.PROGRESS_WIDTH,
+                        PoweredFramingSawScreen.PROGRESS_HEIGHT
+                ),
+                PoweredFramingSawScreen.class,
+                FramingSawRecipeCategory.SAW_CATEGORY
+        );
+        registry.registerFocusedStack(new FramingSawFocusedStackProvider());
+    }
+
+    @Override
+    public void registerExclusionZones(ExclusionZones zones)
+    {
+        zones.register(FramingSawWithEncoderScreen.class, new FramingSawExclusionZoneProvider());
+    }
+}

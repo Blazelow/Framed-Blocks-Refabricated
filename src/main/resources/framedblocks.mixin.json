@@ -1,0 +1,20 @@
+{
+  "required": true,
+  "package": "xfacthd.framedblocks.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "plugin": "xfacthd.framedblocks.common.util.FramedMixinConfigPlugin",
+  "mixins": [
+    "AccessorIngredient",
+    "AccessorStateDefinitionBuilder",
+    "AccessorTransientCraftingContainer",
+    "InvokerBlockItem",
+    "MixinBlockStateBase",
+    "MixinHopperBlockEntity",
+    "MixinMapItemSavedData",
+    "MixinStairBlock"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "minVersion": "0.8"
+}

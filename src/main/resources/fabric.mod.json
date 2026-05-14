@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "id": "framedblocks",
+  "version": "${version}",
+  "name": "FramedBlocks",
+  "description": "Fancy building blocks",
+  "authors": [
+    "XFactHD"
+  ],
+  "contact": {
+    "homepage": "https://www.curseforge.com/minecraft/mc-mods/framedblocks",
+    "issues": "https://www.github.com/xfacthd/framedblocks"
+  },
+  "license": "LGPL-3.0-or-later",
+  "icon": "logo.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "xfacthd.framedblocks.FramedBlocks"
+    ],
+    "client": [
+      "xfacthd.framedblocks.client.FBClient"
+    ]
+  },
+  "mixins": [
+    "framedblocks.mixin.json",
+    {
+      "config": "framedblocks.client.mixin.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "~${minecraft_version}",
+    "java": ">=21"
+  },
+  "suggests": {
+    "jade": "*",
+    "jei": "*",
+    "emi": "*",
+    "roughlyenoughitems": "*",
+    "create": "*",
+    "ae2": "*",
+    "diagonalblocks": "*",
+    "amendments": "*",
+    "additionalplacements": "*",
+    "atlasviewer": "*",
+    "buildinggadgets": "*",
+    "athena": "*",
+    "searchables": "*"
+  }
+}

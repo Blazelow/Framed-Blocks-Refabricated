@@ -1,0 +1,948 @@
+package xfacthd.framedblocks.common;
+
+import com.google.common.base.Preconditions;
+import com.mojang.serialization.MapCodec;
+import net.minecraft.core.Holder;
+import net.minecraft.core.Registry;
+import net.minecraft.core.particles.ParticleOptions;
+import net.minecraft.core.particles.ParticleType;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.world.flag.FeatureFlags;
+import net.minecraft.world.inventory.*;
+import net.minecraft.world.item.*;
+import net.minecraft.world.item.crafting.*;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.storage.loot.functions.LootItemFunctionType;
+import net.minecraft.world.level.storage.loot.predicates.LootItemConditionType;
+import net.minecraft.world.level.storage.loot.providers.number.LootNumberProviderType;
+import net.fabricmc.fabric.api.screenhandler.v1.ExtendedScreenHandlerType;
+import net.fabricmc.fabric.api.registry.FuelRegistryEvents;
+import net.fabricmc.loader.api.FabricLoader;
+import xfacthd.framedblocks.common.data.component.FluidContent;
+import xfacthd.framedblocks.common.util.registration.*;
+import xfacthd.framedblocks.api.block.blockentity.FramedBlockEntity;
+import xfacthd.framedblocks.api.block.IFramedBlock;
+import xfacthd.framedblocks.api.blueprint.AuxBlueprintData;
+import xfacthd.framedblocks.api.camo.*;
+import xfacthd.framedblocks.api.camo.empty.EmptyCamoContainerFactory;
+import xfacthd.framedblocks.api.component.FrameConfig;
+import xfacthd.framedblocks.api.util.*;
+import xfacthd.framedblocks.api.util.registration.*;
+import xfacthd.framedblocks.common.block.interactive.button.*;
+import xfacthd.framedblocks.common.block.interactive.pressureplate.*;
+import xfacthd.framedblocks.common.block.rail.fancy.*;
+import xfacthd.framedblocks.common.block.rail.vanillaslope.*;
+import xfacthd.framedblocks.common.block.sign.*;
+import xfacthd.framedblocks.common.block.slopeedge.*;
+import xfacthd.framedblocks.common.block.special.FramingSawBlock;
+import xfacthd.framedblocks.common.block.special.PoweredFramingSawBlock;
+import xfacthd.framedblocks.common.block.cube.*;
+import xfacthd.framedblocks.common.block.door.*;
+import xfacthd.framedblocks.common.block.interactive.*;
+import xfacthd.framedblocks.common.block.pane.*;
+import xfacthd.framedblocks.common.block.pillar.*;
+import xfacthd.framedblocks.common.block.prism.*;
+import xfacthd.framedblocks.common.block.slab.*;
+import xfacthd.framedblocks.common.block.slope.*;
+import xfacthd.framedblocks.common.block.slopepanel.*;
+import xfacthd.framedblocks.common.block.slopepanelcorner.*;
+import xfacthd.framedblocks.common.block.slopeslab.*;
+import xfacthd.framedblocks.common.block.stairs.standard.*;
+import xfacthd.framedblocks.common.block.stairs.vertical.*;
+import xfacthd.framedblocks.common.block.torch.*;
+import xfacthd.framedblocks.common.blockentity.doubled.FramedDoubleBlockEntity;
+import xfacthd.framedblocks.common.blockentity.doubled.prism.*;
+import xfacthd.framedblocks.common.blockentity.doubled.rail.*;
+import xfacthd.framedblocks.common.blockentity.doubled.slab.FramedAdjustableDoubleBlockEntity;
+import xfacthd.framedblocks.common.blockentity.doubled.slope.*;
+import xfacthd.framedblocks.common.blockentity.doubled.slopeedge.*;
+import xfacthd.framedblocks.common.blockentity.doubled.slopepanel.*;
+import xfacthd.framedblocks.common.blockentity.doubled.slopepanelcorner.*;
+import xfacthd.framedblocks.common.blockentity.doubled.slopeslab.*;
+import xfacthd.framedblocks.common.blockentity.doubled.stairs.*;
+import xfacthd.framedblocks.common.blockentity.special.*;
+import xfacthd.framedblocks.common.compat.jei.camo.JeiCamoApplicationRecipe;
+import xfacthd.framedblocks.common.crafting.CamoApplicationRecipe;
+import xfacthd.framedblocks.common.crafting.FramingSawRecipe;
+import xfacthd.framedblocks.common.crafting.ShapeRotationRecipe;
+import xfacthd.framedblocks.common.data.*;
+import xfacthd.framedblocks.common.data.blueprint.auxdata.DoorAuxBlueprintData;
+import xfacthd.framedblocks.common.data.camo.block.BlockCamoContainerFactory;
+import xfacthd.framedblocks.common.data.camo.fluid.FluidCamoContainerFactory;
+import xfacthd.framedblocks.api.blueprint.BlueprintData;
+import xfacthd.framedblocks.common.data.component.*;
+import xfacthd.framedblocks.api.datagen.loot.objects.NonTrivialCamoLootCondition;
+import xfacthd.framedblocks.api.datagen.loot.objects.SplitCamoLootFunction;
+import xfacthd.framedblocks.common.data.loot.LayeredCubeAdditionalItemCountNumberProvider;
+import xfacthd.framedblocks.common.item.*;
+import xfacthd.framedblocks.common.menu.*;
+import xfacthd.framedblocks.common.particle.BasicParticleType;
+import xfacthd.framedblocks.common.particle.FluidParticleOptions;
+import xfacthd.framedblocks.common.util.FramedCreativeTab;
+import xfacthd.framedblocks.common.util.registration.*;
+
+import java.util.*;
+import java.util.function.Function;
+import java.util.function.Supplier;
+
+@SuppressWarnings("unused")
+public final class FBContent
+{
+    private static final FabricRegistrar<Block> BLOCKS = FabricRegistrar.forMod(Registries.BLOCK);
+    private static final DeferredDataComponentTypeRegister DATA_COMPONENTS = DeferredDataComponentTypeRegister.create(FramedConstants.MOD_ID);
+    private static final FabricRegistrar<Item> ITEMS = FabricRegistrar.forMod(Registries.ITEM);
+    private static final DeferredBlockEntityRegister BE_TYPES = DeferredBlockEntityRegister.create(FramedConstants.MOD_ID);
+    private static final FabricRegistrar<MenuType<?>> CONTAINER_TYPES = FabricRegistrar.forMod(Registries.MENU);
+    private static final DeferredRecipeTypeRegister RECIPE_TYPES = DeferredRecipeTypeRegister.create(FramedConstants.MOD_ID);
+    private static final DeferredRecipeSerializerRegister RECIPE_SERIALIZERS = DeferredRecipeSerializerRegister.create(FramedConstants.MOD_ID);
+    private static final FabricRegistrar<CreativeModeTab> CREATIVE_TABS = FabricRegistrar.forMod(Registries.CREATIVE_MODE_TAB);
+    private static final FabricRegistrar<ParticleType<?>> PARTICLE_TYPES = FabricRegistrar.forMod(Registries.PARTICLE_TYPE);
+    private static final FabricRegistrar<LootItemConditionType> LOOT_CONDITIONS = FabricRegistrar.forMod(Registries.LOOT_CONDITION_TYPE);
+    private static final FabricRegistrar<LootItemFunctionType<?>> LOOT_FUNCTIONS = FabricRegistrar.forMod(Registries.LOOT_FUNCTION_TYPE);
+    private static final FabricRegistrar<LootNumberProviderType> LOOT_NUMBER_PROVIDERS = FabricRegistrar.forMod(Registries.LOOT_NUMBER_PROVIDER_TYPE);
+
+    // Custom registries created eagerly via FabricRegistryBuilder; populated during init()
+    private static final FabricRegistrar<CamoContainerFactory<?>> CAMO_CONTAINER_FACTORIES =
+            FabricRegistrar.create(FramedConstants.CAMO_CONTAINER_FACTORY_REGISTRY_KEY, FramedConstants.MOD_ID);
+    public static Registry<CamoContainerFactory<?>> CAMO_CONTAINER_FACTORY_REGISTRY; // set during init()
+
+    private static final DeferredAuxDataTypeRegister AUX_BLUEPRINT_DATA_TYPES = DeferredAuxDataTypeRegister.create(FramedConstants.MOD_ID);
+    public static Registry<AuxBlueprintData.Type<?>> AUX_BLUEPRINT_DATA_TYPE_REGISTRY; // set during init()
+
+    private static final Map<BlockType, Holder<Block>> BLOCKS_BY_TYPE = new EnumMap<>(BlockType.class);
+    private static final Map<FramedToolType, Holder<Item>> TOOLS_BY_TYPE = new EnumMap<>(FramedToolType.class);
+    private static final List<DeferredBlockEntity<? extends FramedBlockEntity>> FRAMED_BLOCK_ENTITIES = new ArrayList<>();
+    private static final List<DeferredBlockEntity<? extends FramedDoubleBlockEntity>> DOUBLE_BLOCK_ENTITIES = new ArrayList<>();
+
+    // region Blocks
+    public static final Holder<Block> BLOCK_FRAMED_CUBE = registerBlock(FramedCubeBlock::new, BlockType.FRAMED_CUBE);
+    public static final Holder<Block> BLOCK_FRAMED_SLOPE = registerBlock(FramedSlopeBlock::new, BlockType.FRAMED_SLOPE);
+    public static final Holder<Block> BLOCK_FRAMED_DOUBLE_SLOPE = registerBlock(FramedDoubleSlopeBlock::new, BlockType.FRAMED_DOUBLE_SLOPE);
+    public static final Holder<Block> BLOCK_FRAMED_HALF_SLOPE = registerBlock(FramedHalfSlopeBlock::new, BlockType.FRAMED_HALF_SLOPE);
+    public static final Holder<Block> BLOCK_FRAMED_VERTICAL_HALF_SLOPE = registerBlock(FramedVerticalHalfSlopeBlock::new, BlockType.FRAMED_VERTICAL_HALF_SLOPE);
+    public static final Holder<Block> BLOCK_FRAMED_DIVIDED_SLOPE = registerBlock(FramedDividedSlopeBlock::new, BlockType.FRAMED_DIVIDED_SLOPE);
+    public static final Holder<Block> BLOCK_FRAMED_DOUBLE_HALF_SLOPE = registerBlock(FramedDoubleHalfSlopeBlock::new, BlockType.FRAMED_DOUBLE_HALF_SLOPE);
+    public static final Holder<Block> BLOCK_FRAMED_VERTICAL_DOUBLE_HALF_SLOPE = registerBlock(FramedVerticalDoubleHalfSlopeBlock::new, BlockType.FRAMED_VERTICAL_DOUBLE_HALF_SLOPE);
+    public static final Holder<Block> BLOCK_FRAMED_CORNER_SLOPE = registerBlock(FramedCornerSlopeBlock::new, BlockType.FRAMED_CORNER_SLOPE);
+    public static final Holder<Block> BLOCK_FRAMED_INNER_CORNER_SLOPE = registerBlock(FramedCornerSlopeBlock::new, BlockType.FRAMED_INNER_CORNER_SLOPE);
+    public static final Holder<Block> BLOCK_FRAMED_DOUBLE_CORNER = registerBlock(FramedDoubleCornerBlock::new, BlockType.FRAMED_DOUBLE_CORNER);
+    public static final Holder<Block> BLOCK_FRAMED_PRISM_CORNER = registerBlock(FramedPrismCornerBlock::new, BlockType.FRAMED_PRISM_CORNER);
+    public static final Holder<Block> BLOCK_FRAMED_INNER_PRISM_CORNER = registerBlock(FramedInnerPrismCornerBlock::new, BlockType.FRAMED_INNER_PRISM_CORNER);
+    public static final Holder<Block> BLOCK_FRAMED_DOUBLE_PRISM_CORNER = registerBlock(FramedDoublePrismCornerBlock::new, BlockType.FRAMED_DOUBLE_PRISM_CORNER);
+    public static final Holder<Block> BLOCK_FRAMED_THREEWAY_CORNER = registerBlock(FramedThreewayCornerBlock::new, BlockType.FRAMED_THREEWAY_CORNER);
+    public static final Holder<Block> BLOCK_FRAMED_INNER_THREEWAY_CORNER = registerBlock(FramedInnerThreewayCornerBlock::new, BlockType.FRAMED_INNER_THREEWAY_CORNER);
+    public static final Holder<Block> BLOCK_FRAMED_DOUBLE_THREEWAY_CORNER = registerBlock(FramedDoubleThreewayCornerBlock::new, BlockType.FRAMED_DOUBLE_THREEWAY_CORNER);
+    public static final Holder<Block> BLOCK_FRAMED_SLOPE_EDGE = registerBlock(FramedSlopeEdgeBlock::new, BlockType.FRAMED_SLOPE_EDGE);
+    public static final Holder<Block> BLOCK_FRAMED_ELEVATED_SLOPE_EDGE = registerBlock(FramedElevatedSlopeEdgeBlock::new, BlockType.FRAMED_ELEVATED_SLOPE_EDGE);
+    public static final Holder<Block> BLOCK_FRAMED_ELEVATED_DOUBLE_SLOPE_EDGE = registerBlock(FramedElevatedDoubleSlopeEdgeBlock::new, BlockType.FRAMED_ELEVATED_DOUBLE_SLOPE_EDGE);
+    public static final Holder<Block> BLOCK_FRAMED_STACKED_SLOPE_EDGE = registerBlock(FramedStackedSlopeEdgeBlock::new, BlockType.FRAMED_STACKED_SLOPE_EDGE);
+    public static final Holder<Block> BLOCK_FRAMED_CORNER_SLOPE_EDGE = registerBlock(FramedCornerSlopeEdgeBlock::new, BlockType.FRAMED_CORNER_SLOPE_EDGE);
+    public static final Holder<Block> BLOCK_FRAMED_INNER_CORNER_SLOPE_EDGE = registerBlock(FramedCornerSlopeEdgeBlock::new, BlockType.FRAMED_INNER_CORNER_SLOPE_EDGE);
+    public static final Holder<Block> BLOCK_FRAMED_ELEVATED_CORNER_SLOPE_EDGE = registerBlock(FramedElevatedCornerSlopeEdgeBlock::new, BlockType.FRAMED_ELEVATED_CORNER_SLOPE_EDGE);
+    public static final Holder<Block> BLOCK_FRAMED_ELEVATED_INNER_CORNER_SLOPE_EDGE = registerBlock(FramedElevatedCornerSlopeEdgeBlock::new, BlockType.FRAMED_ELEVATED_INNER_CORNER_SLOPE_EDGE);
+    public static final Holder<Block> BLOCK_FRAMED_ELEVATED_DOUBLE_CORNER_SLOPE_EDGE = registerBlock(FramedElevatedDoubleCornerSlopeEdgeBlock::new, BlockType.FRAMED_ELEV_DOUBLE_CORNER_SLOPE_EDGE);
+    public static final Holder<Block> BLOCK_FRAMED_ELEVATED_DOUBLE_INNER_CORNER_SLOPE_EDGE = registerBlock(FramedElevatedDoubleInnerCornerSlopeEdgeBlock::new, BlockType.FRAMED_ELEV_DOUBLE_INNER_CORNER_SLOPE_EDGE);
+    public static final Holder<Block> BLOCK_FRAMED_STACKED_CORNER_SLOPE_EDGE = registerBlock(FramedStackedCornerSlopeEdgeBlock::new, BlockType.FRAMED_STACKED_CORNER_SLOPE_EDGE);
+    public static final Holder<Block> BLOCK_FRAMED_STACKED_INNER_CORNER_SLOPE_EDGE = registerBlock(FramedStackedInnerCornerSlopeEdgeBlock::new, BlockType.FRAMED_STACKED_INNER_CORNER_SLOPE_EDGE);
+    public static final Holder<Block> BLOCK_FRAMED_THREEWAY_CORNER_SLOPE_EDGE = registerBlock(FramedThreewayCornerSlopeEdgeBlock::new, BlockType.FRAMED_THREEWAY_CORNER_SLOPE_EDGE);
+    public static final Holder<Block> BLOCK_FRAMED_INNER_THREEWAY_CORNER_SLOPE_EDGE = registerBlock(FramedThreewayCornerSlopeEdgeBlock::new, BlockType.FRAMED_INNER_THREEWAY_CORNER_SLOPE_EDGE);
+    public static final Holder<Block> BLOCK_FRAMED_SLAB = registerBlock(FramedSlabBlock::new, BlockType.FRAMED_SLAB);
+    public static final Holder<Block> BLOCK_FRAMED_DOUBLE_SLAB = registerBlock(FramedDoubleSlabBlock::new, BlockType.FRAMED_DOUBLE_SLAB);
+    public static final Holder<Block> BLOCK_FRAMED_ADJ_DOUBLE_SLAB = registerBlock(FramedAdjustableDoubleSlabBlock::standard, BlockType.FRAMED_ADJ_DOUBLE_SLAB);
+    public static final Holder<Block> BLOCK_FRAMED_ADJ_DOUBLE_COPYCAT_SLAB = registerBlock(FramedAdjustableDoubleSlabBlock::copycat, BlockType.FRAMED_ADJ_DOUBLE_COPYCAT_SLAB);
+    public static final Holder<Block> BLOCK_FRAMED_DIVIDED_SLAB = registerBlock(FramedDividedSlabBlock::new, BlockType.FRAMED_DIVIDED_SLAB);
+    public static final Holder<Block> BLOCK_FRAMED_SLAB_EDGE = registerBlock(FramedSlabEdgeBlock::new, BlockType.FRAMED_SLAB_EDGE);
+    public static final Holder<Block> BLOCK_FRAMED_SLAB_CORNER = registerBlock(FramedSlabCornerBlock::new, BlockType.FRAMED_SLAB_CORNER);
+    public static final Holder<Block> BLOCK_FRAMED_PANEL = registerBlock(FramedPanelBlock::new, BlockType.FRAMED_PANEL);
+    public static final Holder<Block> BLOCK_FRAMED_DOUBLE_PANEL = registerBlock(FramedDoublePanelBlock::new, BlockType.FRAMED_DOUBLE_PANEL);
+    public static final Holder<Block> BLOCK_FRAMED_ADJ_DOUBLE_PANEL = registerBlock(FramedAdjustableDoublePanelBlock::standard, BlockType.FRAMED_ADJ_DOUBLE_PANEL);
+    public static final Holder<Block> BLOCK_FRAMED_ADJ_DOUBLE_COPYCAT_PANEL = registerBlock(FramedAdjustableDoublePanelBlock::copycat, BlockType.FRAMED_ADJ_DOUBLE_COPYCAT_PANEL);
+    public static final Holder<Block> BLOCK_FRAMED_DIVIDED_PANEL_HOR = registerBlock(FramedDividedPanelBlock::new, BlockType.FRAMED_DIVIDED_PANEL_HORIZONTAL);
+    public static final Holder<Block> BLOCK_FRAMED_DIVIDED_PANEL_VERT = registerBlock(FramedDividedPanelBlock::new, BlockType.FRAMED_DIVIDED_PANEL_VERTICAL);
+    public static final Holder<Block> BLOCK_FRAMED_CORNER_PILLAR = registerBlock(FramedCornerPillarBlock::new, BlockType.FRAMED_CORNER_PILLAR);
+    public static final Holder<Block> BLOCK_FRAMED_STAIRS = registerBlock(FramedStairsBlock::new, BlockType.FRAMED_STAIRS);
+    public static final Holder<Block> BLOCK_FRAMED_DOUBLE_STAIRS = registerBlock(FramedDoubleStairsBlock::new, BlockType.FRAMED_DOUBLE_STAIRS);
+    public static final Holder<Block> BLOCK_FRAMED_HALF_STAIRS = registerBlock(FramedHalfStairsBlock::new, BlockType.FRAMED_HALF_STAIRS);
+    public static final Holder<Block> BLOCK_FRAMED_DIVIDED_STAIRS = registerBlock(FramedDividedStairsBlock::new, BlockType.FRAMED_DIVIDED_STAIRS);
+    public static final Holder<Block> BLOCK_FRAMED_DOUBLE_HALF_STAIRS = registerBlock(FramedDoubleHalfStairsBlock::new, BlockType.FRAMED_DOUBLE_HALF_STAIRS);
+    public static final Holder<Block> BLOCK_FRAMED_SLICED_STAIRS_SLAB = registerBlock(FramedSlicedStairsSlabBlock::new, BlockType.FRAMED_SLICED_STAIRS_SLAB);
+    public static final Holder<Block> BLOCK_FRAMED_SLICED_STAIRS_PANEL = registerBlock(FramedSlicedStairsPanelBlock::new, BlockType.FRAMED_SLICED_STAIRS_PANEL);
+    public static final Holder<Block> BLOCK_FRAMED_SLOPED_STAIRS = registerBlock(FramedSlopedStairsBlock::new, BlockType.FRAMED_SLOPED_STAIRS);
+    public static final Holder<Block> BLOCK_FRAMED_SLOPED_DOUBLE_STAIRS = registerBlock(FramedSlopedDoubleStairsBlock::new, BlockType.FRAMED_SLOPED_DOUBLE_STAIRS);
+    public static final Holder<Block> BLOCK_FRAMED_SLICED_SLOPED_STAIRS_SLAB = registerBlock(FramedSlicedSlopedStairsSlabBlock::new, BlockType.FRAMED_SLICED_SLOPED_STAIRS_SLAB);
+    public static final Holder<Block> BLOCK_FRAMED_SLICED_SLOPED_STAIRS_SLOPE = registerBlock(FramedSlicedSlopedStairsSlopeBlock::new, BlockType.FRAMED_SLICED_SLOPED_STAIRS_SLOPE);
+    public static final Holder<Block> BLOCK_FRAMED_VERTICAL_STAIRS = registerBlock(FramedVerticalStairsBlock::new, BlockType.FRAMED_VERTICAL_STAIRS);
+    public static final Holder<Block> BLOCK_FRAMED_VERTICAL_DOUBLE_STAIRS = registerBlock(FramedVerticalDoubleStairsBlock::new, BlockType.FRAMED_VERTICAL_DOUBLE_STAIRS);
+    public static final Holder<Block> BLOCK_FRAMED_VERTICAL_HALF_STAIRS = registerBlock(FramedVerticalHalfStairsBlock::new, BlockType.FRAMED_VERTICAL_HALF_STAIRS);
+    public static final Holder<Block> BLOCK_FRAMED_VERTICAL_DIVIDED_STAIRS = registerBlock(FramedVerticalDividedStairsBlock::new, BlockType.FRAMED_VERTICAL_DIVIDED_STAIRS);
+    public static final Holder<Block> BLOCK_FRAMED_VERTICAL_DOUBLE_HALF_STAIRS = registerBlock(FramedVerticalDoubleHalfStairsBlock::new, BlockType.FRAMED_VERTICAL_DOUBLE_HALF_STAIRS);
+    public static final Holder<Block> BLOCK_FRAMED_VERTICAL_SLICED_STAIRS = registerBlock(FramedVerticalSlicedStairsBlock::new, BlockType.FRAMED_VERTICAL_SLICED_STAIRS);
+    public static final Holder<Block> BLOCK_FRAMED_VERTICAL_SLOPED_STAIRS = registerBlock(FramedVerticalSlopedStairsBlock::new, BlockType.FRAMED_VERTICAL_SLOPED_STAIRS);
+    public static final Holder<Block> BLOCK_FRAMED_VERTICAL_SLOPED_DOUBLE_STAIRS = registerBlock(FramedVerticalSlopedDoubleStairsBlock::new, BlockType.FRAMED_VERTICAL_SLOPED_DOUBLE_STAIRS);
+    public static final Holder<Block> BLOCK_FRAMED_VERTICAL_SLICED_SLOPED_STAIRS_PANEL = registerBlock(FramedVerticalSlicedSlopedStairsPanelBlock::new, BlockType.FRAMED_VERTICAL_SLICED_SLOPED_STAIRS_PANEL);
+    public static final Holder<Block> BLOCK_FRAMED_VERTICAL_SLICED_SLOPED_STAIRS_SLOPE = registerBlock(FramedVerticalSlicedSlopedStairsSlopeBlock::new, BlockType.FRAMED_VERTICAL_SLICED_SLOPED_STAIRS_SLOPE);
+    public static final Holder<Block> BLOCK_FRAMED_THREEWAY_CORNER_PILLAR = registerBlock(FramedThreewayCornerPillarBlock::new, BlockType.FRAMED_THREEWAY_CORNER_PILLAR);
+    public static final Holder<Block> BLOCK_FRAMED_DOUBLE_THREEWAY_CORNER_PILLAR = registerBlock(FramedDoubleThreewayCornerPillarBlock::new, BlockType.FRAMED_DOUBLE_THREEWAY_CORNER_PILLAR);
+    public static final Holder<Block> BLOCK_FRAMED_WALL = registerBlock(FramedWallBlock::new, BlockType.FRAMED_WALL);
+    public static final Holder<Block> BLOCK_FRAMED_FENCE = registerBlock(FramedFenceBlock::new, BlockType.FRAMED_FENCE);
+    public static final Holder<Block> BLOCK_FRAMED_FENCE_GATE = registerBlock(FramedFenceGateBlock::new, BlockType.FRAMED_FENCE_GATE);
+    public static final Holder<Block> BLOCK_FRAMED_DOOR = registerBlock(FramedDoorBlock::wood, BlockType.FRAMED_DOOR);
+    public static final Holder<Block> BLOCK_FRAMED_IRON_DOOR = registerBlock(FramedDoorBlock::iron, BlockType.FRAMED_IRON_DOOR);
+    public static final Holder<Block> BLOCK_FRAMED_TRAP_DOOR = registerBlock(FramedTrapDoorBlock::wood, BlockType.FRAMED_TRAPDOOR);
+    public static final Holder<Block> BLOCK_FRAMED_IRON_TRAP_DOOR = registerBlock(FramedTrapDoorBlock::iron, BlockType.FRAMED_IRON_TRAPDOOR);
+    public static final Holder<Block> BLOCK_FRAMED_PRESSURE_PLATE = registerBlock(FramedPressurePlateBlock::wood, BlockType.FRAMED_PRESSURE_PLATE);
+    public static final Holder<Block> BLOCK_FRAMED_WATERLOGGABLE_PRESSURE_PLATE = registerBlock(FramedPressurePlateBlock::woodWaterloggable, BlockType.FRAMED_WATERLOGGABLE_PRESSURE_PLATE);
+    public static final Holder<Block> BLOCK_FRAMED_STONE_PRESSURE_PLATE = registerBlock(FramedPressurePlateBlock::stone, BlockType.FRAMED_STONE_PRESSURE_PLATE);
+    public static final Holder<Block> BLOCK_FRAMED_WATERLOGGABLE_STONE_PRESSURE_PLATE = registerBlock(FramedPressurePlateBlock::stoneWaterloggable, BlockType.FRAMED_WATERLOGGABLE_STONE_PRESSURE_PLATE);
+    public static final Holder<Block> BLOCK_FRAMED_OBSIDIAN_PRESSURE_PLATE = registerBlock(FramedPressurePlateBlock::obsidian, BlockType.FRAMED_OBSIDIAN_PRESSURE_PLATE);
+    public static final Holder<Block> BLOCK_FRAMED_WATERLOGGABLE_OBSIDIAN_PRESSURE_PLATE = registerBlock(FramedPressurePlateBlock::obsidianWaterloggable, BlockType.FRAMED_WATERLOGGABLE_OBSIDIAN_PRESSURE_PLATE);
+    public static final Holder<Block> BLOCK_FRAMED_GOLD_PRESSURE_PLATE = registerBlock(FramedWeightedPressurePlateBlock::gold, BlockType.FRAMED_GOLD_PRESSURE_PLATE);
+    public static final Holder<Block> BLOCK_FRAMED_WATERLOGGABLE_GOLD_PRESSURE_PLATE = registerBlock(FramedWeightedPressurePlateBlock::goldWaterloggable, BlockType.FRAMED_WATERLOGGABLE_GOLD_PRESSURE_PLATE);
+    public static final Holder<Block> BLOCK_FRAMED_IRON_PRESSURE_PLATE = registerBlock(FramedWeightedPressurePlateBlock::iron, BlockType.FRAMED_IRON_PRESSURE_PLATE);
+    public static final Holder<Block> BLOCK_FRAMED_WATERLOGGABLE_IRON_PRESSURE_PLATE = registerBlock(FramedWeightedPressurePlateBlock::ironWaterloggable, BlockType.FRAMED_WATERLOGGABLE_IRON_PRESSURE_PLATE);
+    public static final Holder<Block> BLOCK_FRAMED_LADDER = registerBlock(FramedLadderBlock::new, BlockType.FRAMED_LADDER);
+    public static final Holder<Block> BLOCK_FRAMED_BUTTON = registerBlock(FramedButtonBlock::wood, BlockType.FRAMED_BUTTON);
+    public static final Holder<Block> BLOCK_FRAMED_STONE_BUTTON = registerBlock(FramedButtonBlock::stone, BlockType.FRAMED_STONE_BUTTON);
+    public static final Holder<Block> BLOCK_FRAMED_LARGE_BUTTON = registerBlock(FramedLargeButtonBlock::wood, BlockType.FRAMED_LARGE_BUTTON);
+    public static final Holder<Block> BLOCK_FRAMED_LARGE_STONE_BUTTON = registerBlock(FramedLargeButtonBlock::stone, BlockType.FRAMED_LARGE_STONE_BUTTON);
+    public static final Holder<Block> BLOCK_FRAMED_LEVER = registerBlock(FramedLeverBlock::new, BlockType.FRAMED_LEVER);
+    public static final Holder<Block> BLOCK_FRAMED_SIGN = registerBlock(FramedStandingSignBlock::new, BlockType.FRAMED_SIGN);
+    public static final Holder<Block> BLOCK_FRAMED_WALL_SIGN = registerBlock(FramedWallSignBlock::new, BlockType.FRAMED_WALL_SIGN);
+    public static final Holder<Block> BLOCK_FRAMED_HANGING_SIGN = registerBlock(FramedCeilingHangingSignBlock::new, BlockType.FRAMED_HANGING_SIGN);
+    public static final Holder<Block> BLOCK_FRAMED_WALL_HANGING_SIGN = registerBlock(FramedWallHangingSignBlock::new, BlockType.FRAMED_WALL_HANGING_SIGN);
+    public static final Holder<Block> BLOCK_FRAMED_TORCH = registerBlock(FramedTorchBlock::new, BlockType.FRAMED_TORCH);
+    public static final Holder<Block> BLOCK_FRAMED_WALL_TORCH = registerBlock(FramedWallTorchBlock::new, BlockType.FRAMED_WALL_TORCH);
+    public static final Holder<Block> BLOCK_FRAMED_SOUL_TORCH = registerBlock(FramedSoulTorchBlock::new, BlockType.FRAMED_SOUL_TORCH);
+    public static final Holder<Block> BLOCK_FRAMED_SOUL_WALL_TORCH = registerBlock(FramedSoulWallTorchBlock::new, BlockType.FRAMED_SOUL_WALL_TORCH);
+    public static final Holder<Block> BLOCK_FRAMED_REDSTONE_TORCH = registerBlock(FramedRedstoneTorchBlock::new, BlockType.FRAMED_REDSTONE_TORCH);
+    public static final Holder<Block> BLOCK_FRAMED_REDSTONE_WALL_TORCH = registerBlock(FramedRedstoneWallTorchBlock::new, BlockType.FRAMED_REDSTONE_WALL_TORCH);
+    public static final Holder<Block> BLOCK_FRAMED_FLOOR = registerBlock(FramedFloorBlock::new, BlockType.FRAMED_FLOOR_BOARD);
+    public static final Holder<Block> BLOCK_FRAMED_WALL_BOARD = registerBlock(FramedWallBoardBlock::new, BlockType.FRAMED_WALL_BOARD);
+    public static final Holder<Block> BLOCK_FRAMED_CORNER_STRIP = registerBlock(FramedCornerStripBlock::new, BlockType.FRAMED_CORNER_STRIP);
+    public static final Holder<Block> BLOCK_FRAMED_LATTICE = registerBlock(FramedLatticeBlock::new, BlockType.FRAMED_LATTICE_BLOCK);
+    public static final Holder<Block> BLOCK_FRAMED_THICK_LATTICE = registerBlock(FramedLatticeBlock::new, BlockType.FRAMED_THICK_LATTICE);
+    public static final Holder<Block> BLOCK_FRAMED_CHEST = registerBlock(FramedChestBlock::new, BlockType.FRAMED_CHEST);
+    public static final Holder<Block> BLOCK_FRAMED_SECRET_STORAGE = registerBlock(FramedStorageBlock::new, BlockType.FRAMED_SECRET_STORAGE);
+    public static final Holder<Block> BLOCK_FRAMED_TANK = registerBlock(FramedTankBlock::new, BlockType.FRAMED_TANK);
+    public static final Holder<Block> BLOCK_FRAMED_BARS = registerBlock(FramedPaneBlock::new, BlockType.FRAMED_BARS);
+    public static final Holder<Block> BLOCK_FRAMED_PANE = registerBlock(FramedPaneBlock::new, BlockType.FRAMED_PANE);
+    public static final Holder<Block> BLOCK_FRAMED_HORIZONTAL_PANE = registerBlock(FramedHorizontalPaneBlock::new, BlockType.FRAMED_HORIZONTAL_PANE);
+    public static final Holder<Block> BLOCK_FRAMED_RAIL_SLOPE = registerBlock(FramedRailSlopeBlock::normal, BlockType.FRAMED_RAIL_SLOPE);
+    public static final Holder<Block> BLOCK_FRAMED_POWERED_RAIL_SLOPE = registerBlock(FramedPoweredRailSlopeBlock::powered, BlockType.FRAMED_POWERED_RAIL_SLOPE);
+    public static final Holder<Block> BLOCK_FRAMED_DETECTOR_RAIL_SLOPE = registerBlock(FramedDetectorRailSlopeBlock::normal, BlockType.FRAMED_DETECTOR_RAIL_SLOPE);
+    public static final Holder<Block> BLOCK_FRAMED_ACTIVATOR_RAIL_SLOPE = registerBlock(FramedPoweredRailSlopeBlock::activator, BlockType.FRAMED_ACTIVATOR_RAIL_SLOPE);
+    public static final Holder<Block> BLOCK_FRAMED_FANCY_RAIL = registerBlock(FramedFancyRailBlock::new, BlockType.FRAMED_FANCY_RAIL);
+    public static final Holder<Block> BLOCK_FRAMED_FANCY_POWERED_RAIL = registerBlock(FramedFancyPoweredRailBlock::powered, BlockType.FRAMED_FANCY_POWERED_RAIL);
+    public static final Holder<Block> BLOCK_FRAMED_FANCY_DETECTOR_RAIL = registerBlock(FramedFancyDetectorRailBlock::new, BlockType.FRAMED_FANCY_DETECTOR_RAIL);
+    public static final Holder<Block> BLOCK_FRAMED_FANCY_ACTIVATOR_RAIL = registerBlock(FramedFancyPoweredRailBlock::activator, BlockType.FRAMED_FANCY_ACTIVATOR_RAIL);
+    public static final Holder<Block> BLOCK_FRAMED_FANCY_RAIL_SLOPE = registerBlock(FramedRailSlopeBlock::fancy, BlockType.FRAMED_FANCY_RAIL_SLOPE);
+    public static final Holder<Block> BLOCK_FRAMED_FANCY_POWERED_RAIL_SLOPE = registerBlock(FramedPoweredRailSlopeBlock::poweredFancy, BlockType.FRAMED_FANCY_POWERED_RAIL_SLOPE);
+    public static final Holder<Block> BLOCK_FRAMED_FANCY_DETECTOR_RAIL_SLOPE = registerBlock(FramedDetectorRailSlopeBlock::fancy, BlockType.FRAMED_FANCY_DETECTOR_RAIL_SLOPE);
+    public static final Holder<Block> BLOCK_FRAMED_FANCY_ACTIVATOR_RAIL_SLOPE = registerBlock(FramedPoweredRailSlopeBlock::activatorFancy, BlockType.FRAMED_FANCY_ACTIVATOR_RAIL_SLOPE);
+    public static final Holder<Block> BLOCK_FRAMED_FLOWER_POT = registerBlock(FramedFlowerPotBlock::new, BlockType.FRAMED_FLOWER_POT);
+    public static final Holder<Block> BLOCK_FRAMED_PILLAR = registerBlock(FramedPillarBlock::new, BlockType.FRAMED_PILLAR);
+    public static final Holder<Block> BLOCK_FRAMED_HALF_PILLAR = registerBlock(FramedHalfPillarBlock::new, BlockType.FRAMED_HALF_PILLAR);
+    public static final Holder<Block> BLOCK_FRAMED_PILLAR_SOCKET = registerBlock(FramedPillarSocketBlock::new, BlockType.FRAMED_PILLAR_SOCKET);
+    public static final Holder<Block> BLOCK_FRAMED_SPLIT_PILLAR_SOCKET = registerBlock(FramedSplitPillarSocketBlock::new, BlockType.FRAMED_SPLIT_PILLAR_SOCKET);
+    public static final Holder<Block> BLOCK_FRAMED_POST = registerBlock(FramedPillarBlock::new, BlockType.FRAMED_POST);
+    public static final Holder<Block> BLOCK_FRAMED_COLLAPSIBLE_BLOCK = registerBlock(FramedCollapsibleBlock::new, BlockType.FRAMED_COLLAPSIBLE_BLOCK);
+    public static final Holder<Block> BLOCK_FRAMED_COLLAPSIBLE_COPYCAT_BLOCK = registerBlock(FramedCollapsibleCopycatBlock::new, BlockType.FRAMED_COLLAPSIBLE_COPYCAT_BLOCK);
+    public static final Holder<Block> BLOCK_FRAMED_BOUNCY_CUBE = registerBlock(FramedBouncyCubeBlock::new, BlockType.FRAMED_BOUNCY_CUBE);
+    public static final Holder<Block> BLOCK_FRAMED_REDSTONE_BLOCK = registerBlock(FramedRedstoneBlock::new, BlockType.FRAMED_REDSTONE_BLOCK);
+    public static final Holder<Block> BLOCK_FRAMED_PRISM = registerBlock(FramedPrismBlock::new, BlockType.FRAMED_PRISM);
+    public static final Holder<Block> BLOCK_FRAMED_ELEVATED_INNER_PRISM = registerBlock(FramedElevatedPrismBlock::new, BlockType.FRAMED_ELEVATED_INNER_PRISM);
+    public static final Holder<Block> BLOCK_FRAMED_ELEVATED_INNER_DOUBLE_PRISM = registerBlock(FramedElevatedDoublePrismBlock::new, BlockType.FRAMED_ELEVATED_INNER_DOUBLE_PRISM);
+    public static final Holder<Block> BLOCK_FRAMED_SLOPED_PRISM = registerBlock(FramedSlopedPrismBlock::new, BlockType.FRAMED_SLOPED_PRISM);
+    public static final Holder<Block> BLOCK_FRAMED_ELEVATED_INNER_SLOPED_PRISM = registerBlock(FramedElevatedSlopedPrismBlock::new, BlockType.FRAMED_ELEVATED_INNER_SLOPED_PRISM);
+    public static final Holder<Block> BLOCK_FRAMED_ELEVATED_INNER_DOUBLE_SLOPED_PRISM = registerBlock(FramedElevatedDoubleSlopedPrismBlock::new, BlockType.FRAMED_ELEVATED_INNER_DOUBLE_SLOPED_PRISM);
+    public static final Holder<Block> BLOCK_FRAMED_SLOPE_SLAB = registerBlock(FramedSlopeSlabBlock::new, BlockType.FRAMED_SLOPE_SLAB);
+    public static final Holder<Block> BLOCK_FRAMED_ELEVATED_SLOPE_SLAB = registerBlock(FramedElevatedSlopeSlabBlock::new, BlockType.FRAMED_ELEVATED_SLOPE_SLAB);
+    public static final Holder<Block> BLOCK_FRAMED_COMPOUND_SLOPE_SLAB = registerBlock(FramedCompoundSlopeSlabBlock::new, BlockType.FRAMED_COMPOUND_SLOPE_SLAB);
+    public static final Holder<Block> BLOCK_FRAMED_DOUBLE_SLOPE_SLAB = registerBlock(FramedDoubleSlopeSlabBlock::new, BlockType.FRAMED_DOUBLE_SLOPE_SLAB);
+    public static final Holder<Block> BLOCK_FRAMED_INVERSE_DOUBLE_SLOPE_SLAB = registerBlock(FramedInverseDoubleSlopeSlabBlock::new, BlockType.FRAMED_INV_DOUBLE_SLOPE_SLAB);
+    public static final Holder<Block> BLOCK_FRAMED_ELEVATED_DOUBLE_SLOPE_SLAB = registerBlock(FramedElevatedDoubleSlopeSlabBlock::new, BlockType.FRAMED_ELEVATED_DOUBLE_SLOPE_SLAB);
+    public static final Holder<Block> BLOCK_FRAMED_STACKED_SLOPE_SLAB = registerBlock(FramedStackedSlopeSlabBlock::new, BlockType.FRAMED_STACKED_SLOPE_SLAB);
+    public static final Holder<Block> BLOCK_FRAMED_FLAT_SLOPE_SLAB_CORNER = registerBlock(FramedFlatSlopeSlabCornerBlock::new, BlockType.FRAMED_FLAT_SLOPE_SLAB_CORNER);
+    public static final Holder<Block> BLOCK_FRAMED_FLAT_INNER_SLOPE_SLAB_CORNER = registerBlock(FramedFlatSlopeSlabCornerBlock::new, BlockType.FRAMED_FLAT_INNER_SLOPE_SLAB_CORNER);
+    public static final Holder<Block> BLOCK_FRAMED_FLAT_ELEVATED_SLOPE_SLAB_CORNER = registerBlock(FramedFlatElevatedSlopeSlabCornerBlock::new, BlockType.FRAMED_FLAT_ELEV_SLOPE_SLAB_CORNER);
+    public static final Holder<Block> BLOCK_FRAMED_FLAT_ELEVATED_INNER_SLOPE_SLAB_CORNER = registerBlock(FramedFlatElevatedSlopeSlabCornerBlock::new, BlockType.FRAMED_FLAT_ELEV_INNER_SLOPE_SLAB_CORNER);
+    public static final Holder<Block> BLOCK_FRAMED_FLAT_DOUBLE_SLOPE_SLAB_CORNER = registerBlock(FramedFlatDoubleSlopeSlabCornerBlock::new, BlockType.FRAMED_FLAT_DOUBLE_SLOPE_SLAB_CORNER);
+    public static final Holder<Block> BLOCK_FRAMED_FLAT_INVERSE_DOUBLE_SLOPE_SLAB_CORNER = registerBlock(FramedFlatInverseDoubleSlopeSlabCornerBlock::new, BlockType.FRAMED_FLAT_INV_DOUBLE_SLOPE_SLAB_CORNER);
+    public static final Holder<Block> BLOCK_FRAMED_FLAT_ELEVATED_DOUBLE_SLOPE_SLAB_CORNER = registerBlock(FramedFlatElevatedDoubleSlopeSlabCornerBlock::new, BlockType.FRAMED_FLAT_ELEV_DOUBLE_SLOPE_SLAB_CORNER);
+    public static final Holder<Block> BLOCK_FRAMED_FLAT_ELEVATED_INNER_DOUBLE_SLOPE_SLAB_CORNER = registerBlock(FramedFlatElevatedDoubleSlopeSlabCornerBlock::new, BlockType.FRAMED_FLAT_ELEV_INNER_DOUBLE_SLOPE_SLAB_CORNER);
+    public static final Holder<Block> BLOCK_FRAMED_FLAT_STACKED_SLOPE_SLAB_CORNER = registerBlock(FramedFlatStackedSlopeSlabCornerBlock::new, BlockType.FRAMED_FLAT_STACKED_SLOPE_SLAB_CORNER);
+    public static final Holder<Block> BLOCK_FRAMED_FLAT_STACKED_INNER_SLOPE_SLAB_CORNER = registerBlock(FramedFlatStackedSlopeSlabCornerBlock::new, BlockType.FRAMED_FLAT_STACKED_INNER_SLOPE_SLAB_CORNER);
+    public static final Holder<Block> BLOCK_FRAMED_SLOPE_PANEL = registerBlock(FramedSlopePanelBlock::new, BlockType.FRAMED_SLOPE_PANEL);
+    public static final Holder<Block> BLOCK_FRAMED_EXTENDED_SLOPE_PANEL = registerBlock(FramedExtendedSlopePanelBlock::new, BlockType.FRAMED_EXTENDED_SLOPE_PANEL);
+    public static final Holder<Block> BLOCK_FRAMED_COMPOUND_SLOPE_PANEL = registerBlock(FramedCompoundSlopePanelBlock::new, BlockType.FRAMED_COMPOUND_SLOPE_PANEL);
+    public static final Holder<Block> BLOCK_FRAMED_DOUBLE_SLOPE_PANEL = registerBlock(FramedDoubleSlopePanelBlock::new, BlockType.FRAMED_DOUBLE_SLOPE_PANEL);
+    public static final Holder<Block> BLOCK_FRAMED_INVERSE_DOUBLE_SLOPE_PANEL = registerBlock(FramedInverseDoubleSlopePanelBlock::new, BlockType.FRAMED_INV_DOUBLE_SLOPE_PANEL);
+    public static final Holder<Block> BLOCK_FRAMED_EXTENDED_DOUBLE_SLOPE_PANEL = registerBlock(FramedExtendedDoubleSlopePanelBlock::new, BlockType.FRAMED_EXTENDED_DOUBLE_SLOPE_PANEL);
+    public static final Holder<Block> BLOCK_FRAMED_STACKED_SLOPE_PANEL = registerBlock(FramedStackedSlopePanelBlock::new, BlockType.FRAMED_STACKED_SLOPE_PANEL);
+    public static final Holder<Block> BLOCK_FRAMED_FLAT_SLOPE_PANEL_CORNER = registerBlock(FramedFlatSlopePanelCornerBlock::new, BlockType.FRAMED_FLAT_SLOPE_PANEL_CORNER);
+    public static final Holder<Block> BLOCK_FRAMED_FLAT_INNER_SLOPE_PANEL_CORNER = registerBlock(FramedFlatSlopePanelCornerBlock::new, BlockType.FRAMED_FLAT_INNER_SLOPE_PANEL_CORNER);
+    public static final Holder<Block> BLOCK_FRAMED_FLAT_EXTENDED_SLOPE_PANEL_CORNER = registerBlock(FramedFlatExtendedSlopePanelCornerBlock::new, BlockType.FRAMED_FLAT_EXT_SLOPE_PANEL_CORNER);
+    public static final Holder<Block> BLOCK_FRAMED_FLAT_EXTENDED_INNER_SLOPE_PANEL_CORNER = registerBlock(FramedFlatExtendedSlopePanelCornerBlock::new, BlockType.FRAMED_FLAT_EXT_INNER_SLOPE_PANEL_CORNER);
+    public static final Holder<Block> BLOCK_FRAMED_FLAT_DOUBLE_SLOPE_PANEL_CORNER = registerBlock(FramedFlatDoubleSlopePanelCornerBlock::new, BlockType.FRAMED_FLAT_DOUBLE_SLOPE_PANEL_CORNER);
+    public static final Holder<Block> BLOCK_FRAMED_FLAT_INVERSE_DOUBLE_SLOPE_PANEL_CORNER = registerBlock(FramedFlatInverseDoubleSlopePanelCornerBlock::new, BlockType.FRAMED_FLAT_INV_DOUBLE_SLOPE_PANEL_CORNER);
+    public static final Holder<Block> BLOCK_FRAMED_FLAT_EXTENDED_DOUBLE_SLOPE_PANEL_CORNER = registerBlock(FramedFlatExtendedDoubleSlopePanelCornerBlock::new, BlockType.FRAMED_FLAT_EXT_DOUBLE_SLOPE_PANEL_CORNER);
+    public static final Holder<Block> BLOCK_FRAMED_FLAT_EXTENDED_INNER_DOUBLE_SLOPE_PANEL_CORNER = registerBlock(FramedFlatExtendedDoubleSlopePanelCornerBlock::new, BlockType.FRAMED_FLAT_EXT_INNER_DOUBLE_SLOPE_PANEL_CORNER);
+    public static final Holder<Block> BLOCK_FRAMED_FLAT_STACKED_SLOPE_PANEL_CORNER = registerBlock(FramedFlatStackedSlopePanelCornerBlock::new, BlockType.FRAMED_FLAT_STACKED_SLOPE_PANEL_CORNER);
+    public static final Holder<Block> BLOCK_FRAMED_FLAT_STACKED_INNER_SLOPE_PANEL_CORNER = registerBlock(FramedFlatStackedSlopePanelCornerBlock::new, BlockType.FRAMED_FLAT_STACKED_INNER_SLOPE_PANEL_CORNER);
+    public static final Holder<Block> BLOCK_FRAMED_SMALL_CORNER_SLOPE_PANEL = registerBlock(FramedCornerSlopePanelBlock::new, BlockType.FRAMED_SMALL_CORNER_SLOPE_PANEL);
+    public static final Holder<Block> BLOCK_FRAMED_SMALL_CORNER_SLOPE_PANEL_WALL = registerBlock(FramedCornerSlopePanelWallBlock::new, BlockType.FRAMED_SMALL_CORNER_SLOPE_PANEL_W);
+    public static final Holder<Block> BLOCK_FRAMED_LARGE_CORNER_SLOPE_PANEL = registerBlock(FramedCornerSlopePanelBlock::new, BlockType.FRAMED_LARGE_CORNER_SLOPE_PANEL);
+    public static final Holder<Block> BLOCK_FRAMED_LARGE_CORNER_SLOPE_PANEL_WALL = registerBlock(FramedCornerSlopePanelWallBlock::new, BlockType.FRAMED_LARGE_CORNER_SLOPE_PANEL_W);
+    public static final Holder<Block> BLOCK_FRAMED_SMALL_INNER_CORNER_SLOPE_PANEL = registerBlock(FramedCornerSlopePanelBlock::new, BlockType.FRAMED_SMALL_INNER_CORNER_SLOPE_PANEL);
+    public static final Holder<Block> BLOCK_FRAMED_SMALL_INNER_CORNER_SLOPE_PANEL_WALL = registerBlock(FramedCornerSlopePanelWallBlock::new, BlockType.FRAMED_SMALL_INNER_CORNER_SLOPE_PANEL_W);
+    public static final Holder<Block> BLOCK_FRAMED_LARGE_INNER_CORNER_SLOPE_PANEL = registerBlock(FramedLargeInnerCornerSlopePanelBlock::new, BlockType.FRAMED_LARGE_INNER_CORNER_SLOPE_PANEL);
+    public static final Holder<Block> BLOCK_FRAMED_LARGE_INNER_CORNER_SLOPE_PANEL_WALL = registerBlock(FramedLargeInnerCornerSlopePanelWallBlock::new, BlockType.FRAMED_LARGE_INNER_CORNER_SLOPE_PANEL_W);
+    public static final Holder<Block> BLOCK_FRAMED_EXTENDED_CORNER_SLOPE_PANEL = registerBlock(FramedExtendedCornerSlopePanelBlock::new, BlockType.FRAMED_EXT_CORNER_SLOPE_PANEL);
+    public static final Holder<Block> BLOCK_FRAMED_EXTENDED_CORNER_SLOPE_PANEL_WALL = registerBlock(FramedExtendedCornerSlopePanelWallBlock::new, BlockType.FRAMED_EXT_CORNER_SLOPE_PANEL_W);
+    public static final Holder<Block> BLOCK_FRAMED_EXTENDED_INNER_CORNER_SLOPE_PANEL = registerBlock(FramedExtendedCornerSlopePanelBlock::new, BlockType.FRAMED_EXT_INNER_CORNER_SLOPE_PANEL);
+    public static final Holder<Block> BLOCK_FRAMED_EXTENDED_INNER_CORNER_SLOPE_PANEL_WALL = registerBlock(FramedExtendedCornerSlopePanelWallBlock::new, BlockType.FRAMED_EXT_INNER_CORNER_SLOPE_PANEL_W);
+    public static final Holder<Block> BLOCK_FRAMED_SMALL_DOUBLE_CORNER_SLOPE_PANEL = registerBlock(FramedSmallDoubleCornerSlopePanelBlock::new, BlockType.FRAMED_SMALL_DOUBLE_CORNER_SLOPE_PANEL);
+    public static final Holder<Block> BLOCK_FRAMED_SMALL_DOUBLE_CORNER_SLOPE_PANEL_WALL = registerBlock(FramedSmallDoubleCornerSlopePanelWallBlock::new, BlockType.FRAMED_SMALL_DOUBLE_CORNER_SLOPE_PANEL_W);
+    public static final Holder<Block> BLOCK_FRAMED_LARGE_DOUBLE_CORNER_SLOPE_PANEL = registerBlock(FramedDoubleCornerSlopePanelBlock::new, BlockType.FRAMED_LARGE_DOUBLE_CORNER_SLOPE_PANEL);
+    public static final Holder<Block> BLOCK_FRAMED_LARGE_DOUBLE_CORNER_SLOPE_PANEL_WALL = registerBlock(FramedDoubleCornerSlopePanelWallBlock::new, BlockType.FRAMED_LARGE_DOUBLE_CORNER_SLOPE_PANEL_W);
+    public static final Holder<Block> BLOCK_FRAMED_INVERSE_DOUBLE_CORNER_SLOPE_PANEL = registerBlock(FramedInverseDoubleCornerSlopePanelBlock::new, BlockType.FRAMED_INV_DOUBLE_CORNER_SLOPE_PANEL);
+    public static final Holder<Block> BLOCK_FRAMED_INVERSE_DOUBLE_CORNER_SLOPE_PANEL_WALL = registerBlock(FramedInverseDoubleCornerSlopePanelWallBlock::new, BlockType.FRAMED_INV_DOUBLE_CORNER_SLOPE_PANEL_W);
+    public static final Holder<Block> BLOCK_FRAMED_EXTENDED_DOUBLE_CORNER_SLOPE_PANEL = registerBlock(FramedExtendedDoubleCornerSlopePanelBlock::new, BlockType.FRAMED_EXT_DOUBLE_CORNER_SLOPE_PANEL);
+    public static final Holder<Block> BLOCK_FRAMED_EXTENDED_DOUBLE_CORNER_SLOPE_PANEL_WALL = registerBlock(FramedExtendedDoubleCornerSlopePanelWallBlock::new, BlockType.FRAMED_EXT_DOUBLE_CORNER_SLOPE_PANEL_W);
+    public static final Holder<Block> BLOCK_FRAMED_EXTENDED_INNER_DOUBLE_CORNER_SLOPE_PANEL = registerBlock(FramedExtendedDoubleCornerSlopePanelBlock::new, BlockType.FRAMED_EXT_INNER_DOUBLE_CORNER_SLOPE_PANEL);
+    public static final Holder<Block> BLOCK_FRAMED_EXTENDED_INNER_DOUBLE_CORNER_SLOPE_PANEL_WALL = registerBlock(FramedExtendedDoubleCornerSlopePanelWallBlock::new, BlockType.FRAMED_EXT_INNER_DOUBLE_CORNER_SLOPE_PANEL_W);
+    public static final Holder<Block> BLOCK_FRAMED_STACKED_CORNER_SLOPE_PANEL = registerBlock(FramedStackedCornerSlopePanelBlock::new, BlockType.FRAMED_STACKED_CORNER_SLOPE_PANEL);
+    public static final Holder<Block> BLOCK_FRAMED_STACKED_CORNER_SLOPE_PANEL_WALL = registerBlock(FramedStackedCornerSlopePanelWallBlock::new, BlockType.FRAMED_STACKED_CORNER_SLOPE_PANEL_W);
+    public static final Holder<Block> BLOCK_FRAMED_STACKED_INNER_CORNER_SLOPE_PANEL = registerBlock(FramedStackedCornerSlopePanelBlock::new, BlockType.FRAMED_STACKED_INNER_CORNER_SLOPE_PANEL);
+    public static final Holder<Block> BLOCK_FRAMED_STACKED_INNER_CORNER_SLOPE_PANEL_WALL = registerBlock(FramedStackedCornerSlopePanelWallBlock::new, BlockType.FRAMED_STACKED_INNER_CORNER_SLOPE_PANEL_W);
+    public static final Holder<Block> BLOCK_FRAMED_GLOWING_CUBE = registerBlock(FramedGlowingCubeBlock::new, BlockType.FRAMED_GLOWING_CUBE);
+    public static final Holder<Block> BLOCK_FRAMED_PYRAMID = registerBlock(FramedConnectingPyramidBlock::new, BlockType.FRAMED_PYRAMID);
+    public static final Holder<Block> BLOCK_FRAMED_PYRAMID_SLAB = registerBlock(FramedPyramidBlock::new, BlockType.FRAMED_PYRAMID_SLAB);
+    public static final Holder<Block> BLOCK_FRAMED_ELEVATED_PYRAMID_SLAB = registerBlock(FramedConnectingPyramidBlock::new, BlockType.FRAMED_ELEVATED_PYRAMID_SLAB);
+    public static final Holder<Block> BLOCK_FRAMED_UPPER_PYRAMID_SLAB = registerBlock(FramedConnectingPyramidBlock::new, BlockType.FRAMED_UPPER_PYRAMID_SLAB);
+    public static final Holder<Block> BLOCK_FRAMED_STACKED_PYRAMID_SLAB = registerBlock(FramedStackedPyramidSlabBlock::new, BlockType.FRAMED_STACKED_PYRAMID_SLAB);
+    public static final Holder<Block> BLOCK_FRAMED_TARGET = registerBlock(FramedTargetBlock::new, BlockType.FRAMED_TARGET);
+    public static final Holder<Block> BLOCK_FRAMED_GATE = registerBlock(FramedGateBlock::wood, BlockType.FRAMED_GATE);
+    public static final Holder<Block> BLOCK_FRAMED_IRON_GATE = registerBlock(FramedGateBlock::iron, BlockType.FRAMED_IRON_GATE);
+    public static final Holder<Block> BLOCK_FRAMED_ITEM_FRAME = registerBlock(FramedItemFrameBlock::new, BlockType.FRAMED_ITEM_FRAME);
+    public static final Holder<Block> BLOCK_FRAMED_GLOWING_ITEM_FRAME = registerBlock(FramedItemFrameBlock::new, BlockType.FRAMED_GLOWING_ITEM_FRAME);
+    public static final Holder<Block> BLOCK_FRAMED_MINI_CUBE = registerBlock(FramedMiniCubeBlock::new, BlockType.FRAMED_MINI_CUBE);
+    public static final Holder<Block> BLOCK_FRAMED_ONE_WAY_WINDOW = registerBlock(FramedOneWayWindowBlock::new, BlockType.FRAMED_ONE_WAY_WINDOW);
+    public static final Holder<Block> BLOCK_FRAMED_BOOKSHELF = registerBlock(FramedBookshelfBlock::new, BlockType.FRAMED_BOOKSHELF);
+    public static final Holder<Block> BLOCK_FRAMED_CHISELED_BOOKSHELF = registerBlock(FramedChiseledBookshelfBlock::new, BlockType.FRAMED_CHISELED_BOOKSHELF);
+    public static final Holder<Block> BLOCK_FRAMED_CENTERED_SLAB = registerBlock(FramedCenteredSlabBlock::new, BlockType.FRAMED_CENTERED_SLAB);
+    public static final Holder<Block> BLOCK_FRAMED_CENTERED_PANEL = registerBlock(FramedCenteredPanelBlock::new, BlockType.FRAMED_CENTERED_PANEL);
+    public static final Holder<Block> BLOCK_FRAMED_MASONRY_CORNER_SEGMENT = registerBlock(FramedMasonryCornerSegmentBlock::new, BlockType.FRAMED_MASONRY_CORNER_SEGMENT);
+    public static final Holder<Block> BLOCK_FRAMED_MASONRY_CORNER = registerBlock(FramedMasonryCornerBlock::new, BlockType.FRAMED_MASONRY_CORNER);
+    public static final Holder<Block> BLOCK_FRAMED_CHECKERED_CUBE_SEGMENT = registerBlock(FramedCheckeredCubeSegmentBlock::new, BlockType.FRAMED_CHECKERED_CUBE_SEGMENT);
+    public static final Holder<Block> BLOCK_FRAMED_CHECKERED_CUBE = registerBlock(FramedCheckeredCubeBlock::new, BlockType.FRAMED_CHECKERED_CUBE);
+    public static final Holder<Block> BLOCK_FRAMED_CHECKERED_SLAB_SEGMENT = registerBlock(FramedCheckeredSlabSegmentBlock::new, BlockType.FRAMED_CHECKERED_SLAB_SEGMENT);
+    public static final Holder<Block> BLOCK_FRAMED_CHECKERED_SLAB = registerBlock(FramedCheckeredSlabBlock::new, BlockType.FRAMED_CHECKERED_SLAB);
+    public static final Holder<Block> BLOCK_FRAMED_CHECKERED_PANEL_SEGMENT = registerBlock(FramedCheckeredPanelSegmentBlock::new, BlockType.FRAMED_CHECKERED_PANEL_SEGMENT);
+    public static final Holder<Block> BLOCK_FRAMED_CHECKERED_PANEL = registerBlock(FramedCheckeredPanelBlock::new, BlockType.FRAMED_CHECKERED_PANEL);
+    public static final Holder<Block> BLOCK_FRAMED_TUBE = registerBlock(FramedTubeBlock::new, BlockType.FRAMED_TUBE);
+    public static final Holder<Block> BLOCK_FRAMED_CORNER_TUBE = registerBlock(FramedCornerTubeBlock::new, BlockType.FRAMED_CORNER_TUBE);
+    public static final Holder<Block> BLOCK_FRAMED_CHAIN = registerBlock(FramedChainBlock::new, BlockType.FRAMED_CHAIN);
+    public static final Holder<Block> BLOCK_FRAMED_LANTERN = registerBlock(FramedLanternBlock::new, BlockType.FRAMED_LANTERN);
+    public static final Holder<Block> BLOCK_FRAMED_SOUL_LANTERN = registerBlock(FramedLanternBlock::new, BlockType.FRAMED_SOUL_LANTERN);
+    public static final Holder<Block> BLOCK_FRAMED_HOPPER = registerBlock(FramedHopperBlock::new, BlockType.FRAMED_HOPPER);
+    public static final Holder<Block> BLOCK_FRAMED_LAYERED_CUBE = registerBlock(FramedLayeredCubeBlock::new, BlockType.FRAMED_LAYERED_CUBE);
+    public static final Holder<Block> BLOCK_FRAMED_LIGHTNING_ROD = registerBlock(FramedLightningRodBlock::new, BlockType.FRAMED_LIGHTNING_ROD);
+    public static final Holder<Block> BLOCK_FRAMED_PATH = registerBlock(FramedPathBlock::new, BlockType.FRAMED_PATH);
+    // endregion
+
+    // region Special Blocks
+    public static final Holder<Block> BLOCK_FRAMING_SAW = registerBlock("framing_saw", FramingSawBlock::new);
+    public static final Holder<Block> BLOCK_POWERED_FRAMING_SAW = registerBlock("powered_framing_saw", PoweredFramingSawBlock::new);
+    // endregion
+
+    // region DataComponentTypes
+    public static final DeferredDataComponentType<CamoList> DC_TYPE_CAMO_LIST = DATA_COMPONENTS.registerComponentType(
+            "camo_list",
+            builder -> builder.persistent(CamoList.CODEC).networkSynchronized(CamoList.STREAM_CODEC).cacheEncoding()
+    );
+    public static final DeferredDataComponentType<FrameConfig> DC_TYPE_FRAME_CONFIG = DATA_COMPONENTS.registerComponentType(
+            "frame_config",
+            builder -> builder.persistent(FrameConfig.CODEC).networkSynchronized(FrameConfig.STREAM_CODEC)
+    );
+    public static final DeferredDataComponentType<BlueprintData> DC_TYPE_BLUEPRINT_DATA = DATA_COMPONENTS.registerComponentType(
+            "blueprint_data",
+            builder -> builder.persistent(BlueprintData.CODEC).networkSynchronized(BlueprintData.STREAM_CODEC).cacheEncoding()
+    );
+    public static final DeferredDataComponentType<FramedMap> DC_TYPE_FRAMED_MAP = DATA_COMPONENTS.registerComponentType(
+            "framed_map",
+            builder -> builder.persistent(FramedMap.CODEC).networkSynchronized(FramedMap.STREAM_CODEC)
+    );
+    public static final DeferredDataComponentType<CollapsibleBlockData> DC_TYPE_COLLAPSIBLE_BLOCK_DATA = DATA_COMPONENTS.registerComponentType(
+            "collapsible_block",
+            builder -> builder.persistent(CollapsibleBlockData.CODEC).networkSynchronized(CollapsibleBlockData.STREAM_CODEC)
+    );
+    public static final DeferredDataComponentType<CollapsibleCopycatBlockData> DC_TYPE_COLLAPSIBLE_COPYCAT_BLOCK_DATA = DATA_COMPONENTS.registerComponentType(
+            "collapsible_copycat_block",
+            builder -> builder.persistent(CollapsibleCopycatBlockData.CODEC).networkSynchronized(CollapsibleCopycatBlockData.STREAM_CODEC)
+    );
+    public static final DeferredDataComponentType<PottedFlower> DC_TYPE_POTTED_FLOWER = DATA_COMPONENTS.registerComponentType(
+            "potted_flower",
+            builder -> builder.persistent(PottedFlower.CODEC).networkSynchronized(PottedFlower.STREAM_CODEC)
+    );
+    public static final DeferredDataComponentType<TargetColor> DC_TYPE_TARGET_COLOR = DATA_COMPONENTS.registerComponentType(
+            "target_color",
+            builder -> builder.persistent(TargetColor.CODEC).networkSynchronized(TargetColor.STREAM_CODEC)
+    );
+    public static final DeferredDataComponentType<AdjustableDoubleBlockData> DC_TYPE_ADJ_DOUBLE_BLOCK_DATA = DATA_COMPONENTS.registerComponentType(
+            "adjustable_double_block",
+            builder -> builder.persistent(AdjustableDoubleBlockData.CODEC).networkSynchronized(AdjustableDoubleBlockData.STREAM_CODEC)
+    );
+    public static final DeferredDataComponentType<FluidContent> DC_TYPE_TANK_CONTENTS = DATA_COMPONENTS.registerComponentType(
+            "tank_contents",
+            builder -> builder.persistent(FluidContent.CODEC).networkSynchronized(FluidContent.STREAM_CODEC)
+    );
+    // endregion
+
+    // region Items
+    public static final Holder<Item> ITEM_FRAMED_HAMMER = registerToolItem(FramedToolItem::new, FramedToolType.HAMMER);
+    public static final Holder<Item> ITEM_FRAMED_WRENCH = registerToolItem(FramedToolItem::new, FramedToolType.WRENCH);
+    public static final Holder<Item> ITEM_FRAMED_BLUEPRINT = registerToolItem(FramedBlueprintItem::new, FramedToolType.BLUEPRINT);
+    public static final Holder<Item> ITEM_FRAMED_KEY = registerToolItem(FramedToolItem::new, FramedToolType.KEY);
+    public static final Holder<Item> ITEM_FRAMED_SCREWDRIVER = registerToolItem(FramedToolItem::new, FramedToolType.SCREWDRIVER);
+    public static final Holder<Item> ITEM_FRAMED_REINFORCEMENT = ITEMS.register("framed_reinforcement", () ->
+            new Item(new Item.Properties())
+    );
+    public static final Holder<Item> ITEM_PHANTOM_PASTE = ITEMS.register("phantom_paste", () -> new PhantomPasteItem(new Item.Properties()));
+    // endregion
+
+    // region BlockEntityTypes
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_BLOCK = registerBlockEntity(
+            FramedBlockEntity::new,
+            "framed_tile",
+            getDefaultEntityBlocks(),
+            true
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_DOUBLE_BLOCK = registerBlockEntity(
+            FramedDoubleBlockEntity::new,
+            "framed_double_tile",
+            getDefaultDoubleEntityBlocks(),
+            true
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_DOUBLE_FRAMED_SLOPE = registerBlockEntity(
+            FramedDoubleSlopeBlockEntity::new,
+            BlockType.FRAMED_DOUBLE_SLOPE
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_DOUBLE_HALF_SLOPE = registerBlockEntity(
+            FramedDoubleHalfSlopeBlockEntity::new,
+            BlockType.FRAMED_DOUBLE_HALF_SLOPE
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_VERTICAL_DOUBLE_HALF_SLOPE = registerBlockEntity(
+            FramedVerticalDoubleHalfSlopeBlockEntity::new,
+            BlockType.FRAMED_VERTICAL_DOUBLE_HALF_SLOPE
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_DOUBLE_FRAMED_CORNER = registerBlockEntity(
+            FramedDoubleCornerBlockEntity::new,
+            BlockType.FRAMED_DOUBLE_CORNER
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_DOUBLE_FRAMED_THREEWAY_CORNER = registerBlockEntity(
+            FramedDoubleThreewayCornerBlockEntity::new,
+            BlockType.FRAMED_DOUBLE_THREEWAY_CORNER, BlockType.FRAMED_DOUBLE_PRISM_CORNER
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_ELEVATED_DOUBLE_SLOPE_EDGE = registerBlockEntity(
+            FramedElevatedDoubleSlopeEdgeBlockEntity::new,
+            BlockType.FRAMED_ELEVATED_DOUBLE_SLOPE_EDGE
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_ELEVATED_DOUBLE_CORNER_SLOPE_EDGE = registerBlockEntity(
+            FramedElevatedDoubleCornerSlopeEdgeBlockEntity::new,
+            BlockType.FRAMED_ELEV_DOUBLE_CORNER_SLOPE_EDGE
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_ELEVATED_DOUBLE_INNER_CORNER_SLOPE_EDGE = registerBlockEntity(
+            FramedElevatedDoubleInnerCornerSlopeEdgeBlockEntity::new,
+            BlockType.FRAMED_ELEV_DOUBLE_INNER_CORNER_SLOPE_EDGE
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_ADJ_DOUBLE_BLOCK = registerBlockEntity(
+            FramedAdjustableDoubleBlockEntity::standard,
+            BlockType.FRAMED_ADJ_DOUBLE_SLAB, BlockType.FRAMED_ADJ_DOUBLE_PANEL
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_ADJ_DOUBLE_COPYCAT_BLOCK = registerBlockEntity(
+            FramedAdjustableDoubleBlockEntity::copycat,
+            BlockType.FRAMED_ADJ_DOUBLE_COPYCAT_SLAB, BlockType.FRAMED_ADJ_DOUBLE_COPYCAT_PANEL
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_SLOPED_DOUBLE_STAIRS = registerBlockEntity(
+            FramedSlopedDoubleStairsBlockEntity::new,
+            BlockType.FRAMED_SLOPED_DOUBLE_STAIRS
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_SLICED_SLOPED_DOUBLE_STAIRS_SLAB = registerBlockEntity(
+            FramedSlicedSlopedStairsSlabBlockEntity::new,
+            BlockType.FRAMED_SLICED_SLOPED_STAIRS_SLAB
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_SLICED_SLOPED_DOUBLE_STAIRS_SLOPE = registerBlockEntity(
+            FramedSlicedSlopedStairsSlopeBlockEntity::new,
+            BlockType.FRAMED_SLICED_SLOPED_STAIRS_SLOPE
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_VERTICAL_SLOPED_DOUBLE_STAIRS = registerBlockEntity(
+            FramedVerticalSlopedDoubleStairsBlockEntity::new,
+            BlockType.FRAMED_VERTICAL_SLOPED_DOUBLE_STAIRS
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_VERTICAL_SLICED_SLOPED_DOUBLE_STAIRS_PANEL = registerBlockEntity(
+            FramedVerticalSlicedSlopedStairsPanelBlockEntity::new,
+            BlockType.FRAMED_VERTICAL_SLICED_SLOPED_STAIRS_PANEL
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_VERTICAL_SLICED_SLOPED_DOUBLE_STAIRS_SLOPE = registerBlockEntity(
+            FramedVerticalSlicedSlopedStairsSlopeBlockEntity::new,
+            BlockType.FRAMED_VERTICAL_SLICED_SLOPED_STAIRS_SLOPE
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_DOOR = registerBlockEntity(
+            FramedDoorBlockEntity::new,
+            BlockType.FRAMED_DOOR, BlockType.FRAMED_IRON_DOOR
+    );
+    public static final DeferredBlockEntity<FramedSignBlockEntity> BE_TYPE_FRAMED_SIGN = registerBlockEntity(
+            FramedSignBlockEntity::normalSign,
+            BlockType.FRAMED_SIGN, BlockType.FRAMED_WALL_SIGN
+    );
+    public static final DeferredBlockEntity<FramedSignBlockEntity> BE_TYPE_FRAMED_HANGING_SIGN = registerBlockEntity(
+            FramedSignBlockEntity::hangingSign,
+            BlockType.FRAMED_HANGING_SIGN, BlockType.FRAMED_WALL_HANGING_SIGN
+    );
+    public static final DeferredBlockEntity<FramedChestBlockEntity> BE_TYPE_FRAMED_CHEST = registerBlockEntity(
+            FramedChestBlockEntity::new,
+            BlockType.FRAMED_CHEST
+    );
+    public static final DeferredBlockEntity<FramedStorageBlockEntity> BE_TYPE_FRAMED_SECRET_STORAGE = registerBlockEntity(
+            FramedStorageBlockEntity::new,
+            BlockType.FRAMED_SECRET_STORAGE
+    );
+    public static final DeferredBlockEntity<FramedTankBlockEntity> BE_TYPE_FRAMED_TANK = registerBlockEntity(
+            FramedTankBlockEntity::new,
+            BlockType.FRAMED_TANK
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_FANCY_RAIL_SLOPE = registerBlockEntity(
+            FramedFancyRailSlopeBlockEntity::new,
+            BlockType.FRAMED_FANCY_RAIL_SLOPE,
+            BlockType.FRAMED_FANCY_POWERED_RAIL_SLOPE,
+            BlockType.FRAMED_FANCY_DETECTOR_RAIL_SLOPE,
+            BlockType.FRAMED_FANCY_ACTIVATOR_RAIL_SLOPE
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_FLOWER_POT = registerBlockEntity(
+            FramedFlowerPotBlockEntity::new,
+            BlockType.FRAMED_FLOWER_POT
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_COLLAPSIBLE_BLOCK = registerBlockEntity(
+            FramedCollapsibleBlockEntity::new,
+            BlockType.FRAMED_COLLAPSIBLE_BLOCK
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_COLLAPSIBLE_COPYCAT_BLOCK = registerBlockEntity(
+            FramedCollapsibleCopycatBlockEntity::new,
+            BlockType.FRAMED_COLLAPSIBLE_COPYCAT_BLOCK
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_ELEVATED_DOUBLE_PRISM = registerBlockEntity(
+            FramedElevatedDoublePrismBlockEntity::new,
+            BlockType.FRAMED_ELEVATED_INNER_DOUBLE_PRISM
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_ELEVATED_DOUBLE_SLOPED_PRISM = registerBlockEntity(
+            FramedElevatedDoubleSlopedPrismBlockEntity::new,
+            BlockType.FRAMED_ELEVATED_INNER_DOUBLE_SLOPED_PRISM
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_DOUBLE_SLOPE_SLAB = registerBlockEntity(
+            FramedDoubleSlopeSlabBlockEntity::new,
+            BlockType.FRAMED_DOUBLE_SLOPE_SLAB
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_ELEVATED_DOUBLE_SLOPE_SLAB = registerBlockEntity(
+            FramedElevatedDoubleSlopeSlabBlockEntity::new,
+            BlockType.FRAMED_ELEVATED_DOUBLE_SLOPE_SLAB
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_FLAT_DOUBLE_SLOPE_SLAB_CORNER = registerBlockEntity(
+            FramedFlatDoubleSlopeSlabCornerBlockEntity::new,
+            BlockType.FRAMED_FLAT_DOUBLE_SLOPE_SLAB_CORNER
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_FLAT_ELEVATED_DOUBLE_SLOPE_SLAB_CORNER = registerBlockEntity(
+            FramedFlatElevatedDoubleSlopeSlabCornerBlockEntity::new,
+            BlockType.FRAMED_FLAT_ELEV_DOUBLE_SLOPE_SLAB_CORNER, BlockType.FRAMED_FLAT_ELEV_INNER_DOUBLE_SLOPE_SLAB_CORNER
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_DOUBLE_SLOPE_PANEL = registerBlockEntity(
+            FramedDoubleSlopePanelBlockEntity::new,
+            BlockType.FRAMED_DOUBLE_SLOPE_PANEL
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_EXTENDED_DOUBLE_SLOPE_PANEL = registerBlockEntity(
+            FramedExtendedDoubleSlopePanelBlockEntity::new,
+            BlockType.FRAMED_EXTENDED_DOUBLE_SLOPE_PANEL
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_FLAT_DOUBLE_SLOPE_PANEL_CORNER = registerBlockEntity(
+            FramedFlatDoubleSlopePanelCornerBlockEntity::new,
+            BlockType.FRAMED_FLAT_DOUBLE_SLOPE_PANEL_CORNER
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_FLAT_EXTENDED_DOUBLE_SLOPE_PANEL_CORNER = registerBlockEntity(
+            FramedFlatExtendedDoubleSlopePanelCornerBlockEntity::new,
+            BlockType.FRAMED_FLAT_EXT_DOUBLE_SLOPE_PANEL_CORNER, BlockType.FRAMED_FLAT_EXT_INNER_DOUBLE_SLOPE_PANEL_CORNER
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_SMALL_DOUBLE_CORNER_SLOPE_PANEL = registerBlockEntity(
+            FramedSmallDoubleCornerSlopePanelBlockEntity::new,
+            BlockType.FRAMED_SMALL_DOUBLE_CORNER_SLOPE_PANEL
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_SMALL_DOUBLE_CORNER_SLOPE_PANEL_WALL = registerBlockEntity(
+            FramedSmallDoubleCornerSlopePanelWallBlockEntity::new,
+            BlockType.FRAMED_SMALL_DOUBLE_CORNER_SLOPE_PANEL_W
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_LARGE_DOUBLE_CORNER_SLOPE_PANEL = registerBlockEntity(
+            FramedLargeDoubleCornerSlopePanelBlockEntity::new,
+            BlockType.FRAMED_LARGE_DOUBLE_CORNER_SLOPE_PANEL
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_LARGE_DOUBLE_CORNER_SLOPE_PANEL_WALL = registerBlockEntity(
+            FramedLargeDoubleCornerSlopePanelWallBlockEntity::new,
+            BlockType.FRAMED_LARGE_DOUBLE_CORNER_SLOPE_PANEL_W
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_EXTENDED_DOUBLE_CORNER_SLOPE_PANEL = registerBlockEntity(
+            FramedExtendedDoubleCornerSlopePanelBlockEntity::new,
+            BlockType.FRAMED_EXT_DOUBLE_CORNER_SLOPE_PANEL
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_EXTENDED_DOUBLE_CORNER_SLOPE_PANEL_WALL = registerBlockEntity(
+            FramedExtendedDoubleCornerSlopePanelWallBlockEntity::new,
+            BlockType.FRAMED_EXT_DOUBLE_CORNER_SLOPE_PANEL_W
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_EXTENDED_INNER_DOUBLE_CORNER_SLOPE_PANEL = registerBlockEntity(
+            FramedExtendedInnerDoubleCornerSlopePanelBlockEntity::new,
+            BlockType.FRAMED_EXT_INNER_DOUBLE_CORNER_SLOPE_PANEL
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_EXTENDED_INNER_DOUBLE_CORNER_SLOPE_PANEL_WALL = registerBlockEntity(
+            FramedExtendedInnerDoubleCornerSlopePanelWallBlockEntity::new,
+            BlockType.FRAMED_EXT_INNER_DOUBLE_CORNER_SLOPE_PANEL_W
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_TARGET = registerBlockEntity(
+            FramedTargetBlockEntity::new,
+            BlockType.FRAMED_TARGET
+    );
+    public static final DeferredBlockEntity<FramedItemFrameBlockEntity> BE_TYPE_FRAMED_ITEM_FRAME = registerBlockEntity(
+            FramedItemFrameBlockEntity::new,
+            BlockType.FRAMED_ITEM_FRAME, BlockType.FRAMED_GLOWING_ITEM_FRAME
+    );
+    public static final Holder<BlockEntityType<?>> BE_TYPE_FRAMED_OWNABLE_BLOCK = registerBlockEntity(
+            FramedOwnableBlockEntity::new,
+            BlockType.FRAMED_ONE_WAY_WINDOW
+    );
+    public static final DeferredBlockEntity<FramedChiseledBookshelfBlockEntity> BE_TYPE_FRAMED_CHISELED_BOOKSHELF = registerBlockEntity(
+            FramedChiseledBookshelfBlockEntity::new,
+            BlockType.FRAMED_CHISELED_BOOKSHELF
+    );
+    public static final DeferredBlockEntity<FramedHopperBlockEntity> BE_TYPE_FRAMED_HOPPER = registerBlockEntity(
+            FramedHopperBlockEntity::new,
+            BlockType.FRAMED_HOPPER
+    );
+    // endregion
+
+    // region Special BlockEntities
+    public static final DeferredBlockEntity<PoweredFramingSawBlockEntity> BE_TYPE_POWERED_FRAMING_SAW = registerBlockEntity(
+            PoweredFramingSawBlockEntity::new,
+            "powered_framing_saw",
+            () -> new Block[] { BLOCK_POWERED_FRAMING_SAW.value() },
+            false
+    );
+    // endregion
+
+    // region MenuTypes
+    public static final RegistryHolder<MenuType<?>, MenuType<FramedStorageMenu>> MENU_TYPE_FRAMED_STORAGE = registerSimpleMenuType(
+            FramedStorageMenu::createSingle,
+            "framed_chest"
+    );
+    public static final RegistryHolder<MenuType<?>, MenuType<FramedStorageMenu>> MENU_TYPE_FRAMED_DOUBLE_CHEST = registerSimpleMenuType(
+            FramedStorageMenu::createDouble,
+            "framed_double_chest"
+    );
+    public static final RegistryHolder<MenuType<?>, MenuType<FramingSawMenu>> MENU_TYPE_FRAMING_SAW = registerMenuType(
+            (id, inv, buf) -> FramingSawMenu.create(id, inv, ContainerLevelAccess.NULL),
+            "framing_saw"
+    );
+    public static final RegistryHolder<MenuType<?>, MenuType<PoweredFramingSawMenu>> MENU_TYPE_POWERED_FRAMING_SAW = registerMenuType(
+            PoweredFramingSawMenu::new,
+            "powered_framing_saw"
+    );
+    // endregion
+
+    // region RecipeTypes
+    public static final DeferredRecipeType<FramingSawRecipe> RECIPE_TYPE_FRAMING_SAW_RECIPE = registerRecipeType("frame");
+    // endregion
+
+    // region RecipeSerializers
+    public static final Holder<RecipeSerializer<?>> RECIPE_SERIALIZER_FRAMING_SAW_RECIPE = registerRecipeSerializer(
+            "frame", FramingSawRecipe.CODEC, FramingSawRecipe.STREAM_CODEC
+    );
+    public static final Holder<RecipeSerializer<?>> RECIPE_SERIALIZER_APPLY_CAMO = registerRecipeSerializer(
+            "apply_camo", CamoApplicationRecipe.CODEC, CamoApplicationRecipe.STREAM_CODEC
+    );
+    public static final Holder<RecipeSerializer<?>> RECIPE_SERIALIZER_JEI_CAMO = registerRecipeSerializer(
+            "jei_camo", JeiCamoApplicationRecipe.CODEC, JeiCamoApplicationRecipe.STREAM_CODEC
+    );
+    public static final Holder<RecipeSerializer<?>> RECIPE_SERIALIZER_SHAPE_ROTATION = registerRecipeSerializer(
+            "rotate_shape", ShapeRotationRecipe.CODEC, ShapeRotationRecipe.STREAM_CODEC
+    );
+    // endregion
+
+    // region CreativeModeTabs
+    public static final Holder<CreativeModeTab> MAIN_TAB = CREATIVE_TABS.register(
+            "framed_blocks", FramedCreativeTab::makeTab
+    );
+    // endregion
+
+    // region ParticleTypes
+    public static final RegistryHolder<ParticleType<?>, ParticleType<FluidParticleOptions>> FLUID_PARTICLE = registerParticle(
+            "fluid", false, FluidParticleOptions.CODEC, FluidParticleOptions.STREAM_CODEC
+    );
+    // endregion
+
+    // region LootItemConditions
+    public static final Holder<LootItemConditionType> NON_TRIVIAL_CAMO_LOOT_CONDITION = LOOT_CONDITIONS.register(
+            "non_trivial_camo", () -> new LootItemConditionType(NonTrivialCamoLootCondition.MAP_CODEC)
+    );
+    // endregion
+
+    // region LootItemFunctions
+    public static final RegistryHolder<LootItemFunctionType<?>, LootItemFunctionType<SplitCamoLootFunction>> SPLIT_CAMO_LOOT_FUNCTION = LOOT_FUNCTIONS.register(
+            "split_camo", () -> new LootItemFunctionType<>(SplitCamoLootFunction.MAP_CODEC)
+    );
+    // endregion
+
+    // region LootNumberProviderTypes
+    public static final Holder<LootNumberProviderType> LAYERED_CUBE_ADDITIONAL_ITEM_COUNT_NUMBER_PROVIDER = LOOT_NUMBER_PROVIDERS.register(
+            "layered_cube", () -> new LootNumberProviderType(MapCodec.unit(LayeredCubeAdditionalItemCountNumberProvider.INSTANCE))
+    );
+    // endregion
+
+    // region CamoContainer.Factories
+    public static final RegistryHolder<CamoContainerFactory<?>, EmptyCamoContainerFactory> FACTORY_EMPTY = CAMO_CONTAINER_FACTORIES.register(
+            "empty",
+            EmptyCamoContainerFactory::new
+    );
+    public static final RegistryHolder<CamoContainerFactory<?>, BlockCamoContainerFactory> FACTORY_BLOCK = CAMO_CONTAINER_FACTORIES.register(
+            "block",
+            BlockCamoContainerFactory::new
+    );
+    public static final RegistryHolder<CamoContainerFactory<?>, FluidCamoContainerFactory> FACTORY_FLUID = CAMO_CONTAINER_FACTORIES.register(
+            "fluid",
+            FluidCamoContainerFactory::new
+    );
+    // endregion
+
+    // region AuxBlueprintData.Types
+    public static final DeferredAuxDataType<DoorAuxBlueprintData> AUX_TYPE_DOOR_DATA = AUX_BLUEPRINT_DATA_TYPES.registerAuxDataType(
+            "door", DoorAuxBlueprintData.CODEC, DoorAuxBlueprintData.STREAM_CODEC
+    );
+    public static final DeferredAuxDataType<CollapsibleBlockData> AUX_TYPE_COLLAPSIBLE_BLOCK_DATA = AUX_BLUEPRINT_DATA_TYPES.registerAuxDataType(
+            "collapsible_block", CollapsibleBlockData.MAP_CODEC, CollapsibleBlockData.STREAM_CODEC
+    );
+    public static final DeferredAuxDataType<CollapsibleCopycatBlockData> AUX_TYPE_COLLAPSIBLE_COPYCAT_BLOCK_DATA = AUX_BLUEPRINT_DATA_TYPES.registerAuxDataType(
+            "collapsible_copycat_block", CollapsibleCopycatBlockData.MAP_CODEC, CollapsibleCopycatBlockData.STREAM_CODEC
+    );
+    public static final DeferredAuxDataType<PottedFlower> AUX_TYPE_POTTED_FLOWER = AUX_BLUEPRINT_DATA_TYPES.registerAuxDataType(
+            "potted_flower", PottedFlower.MAP_CODEC, PottedFlower.STREAM_CODEC
+    );
+    public static final DeferredAuxDataType<TargetColor> AUX_TYPE_TARGET_COLOR = AUX_BLUEPRINT_DATA_TYPES.registerAuxDataType(
+            "target_color", TargetColor.MAP_CODEC, TargetColor.STREAM_CODEC
+    );
+    public static final DeferredAuxDataType<AdjustableDoubleBlockData> AUX_TYPE_ADJ_DOUBLE_BLOCK_DATA = AUX_BLUEPRINT_DATA_TYPES.registerAuxDataType(
+            "adjustable_double_block", AdjustableDoubleBlockData.MAP_CODEC, AdjustableDoubleBlockData.STREAM_CODEC
+    );
+    // endregion
+
+
+
+    public static void init()
+    {
+        // Build custom registries first so entries can be registered into them
+        CAMO_CONTAINER_FACTORY_REGISTRY = net.fabricmc.fabric.api.event.registry.FabricRegistryBuilder
+                .createSimple(FramedConstants.CAMO_CONTAINER_FACTORY_REGISTRY_KEY)
+                .attribute(net.fabricmc.fabric.api.event.registry.RegistryAttribute.SYNCED)
+                .buildAndRegister();
+        AUX_BLUEPRINT_DATA_TYPE_REGISTRY = net.fabricmc.fabric.api.event.registry.FabricRegistryBuilder
+                .createSimple(FramedConstants.AUX_BLUEPRINT_DATA_TYPE_REGISTRY_KEY)
+                .attribute(net.fabricmc.fabric.api.event.registry.RegistryAttribute.SYNCED)
+                .buildAndRegister();
+
+        // Register all entries into vanilla/custom registries
+        BLOCKS.registerAll(net.minecraft.core.registries.BuiltInRegistries.BLOCK);
+        DATA_COMPONENTS.registerAll();
+        ITEMS.registerAll(net.minecraft.core.registries.BuiltInRegistries.ITEM);
+        BE_TYPES.registerAll();
+        CONTAINER_TYPES.registerAll(net.minecraft.core.registries.BuiltInRegistries.MENU);
+        RECIPE_TYPES.registerAll();
+        RECIPE_SERIALIZERS.registerAll();
+        CREATIVE_TABS.registerAll(net.minecraft.core.registries.BuiltInRegistries.CREATIVE_MODE_TAB);
+        PARTICLE_TYPES.registerAll(net.minecraft.core.registries.BuiltInRegistries.PARTICLE_TYPE);
+        LOOT_CONDITIONS.registerAll(net.minecraft.core.registries.BuiltInRegistries.LOOT_CONDITION_TYPE);
+        LOOT_FUNCTIONS.registerAll(net.minecraft.core.registries.BuiltInRegistries.LOOT_FUNCTION_TYPE);
+        LOOT_NUMBER_PROVIDERS.registerAll(net.minecraft.core.registries.BuiltInRegistries.LOOT_NUMBER_PROVIDER_TYPE);
+        CAMO_CONTAINER_FACTORIES.registerAll(CAMO_CONTAINER_FACTORY_REGISTRY);
+        AUX_BLUEPRINT_DATA_TYPES.registerAll(AUX_BLUEPRINT_DATA_TYPE_REGISTRY);
+
+        DOUBLE_BLOCK_ENTITIES.add((DeferredBlockEntity<? extends FramedDoubleBlockEntity>) BE_TYPE_FRAMED_DOUBLE_BLOCK);
+    }
+
+    public static Collection<Holder<Block>> getRegisteredBlocks()
+    {
+        return BLOCKS_BY_TYPE.values();
+    }
+
+    public static Block byType(BlockType type)
+    {
+        return BLOCKS_BY_TYPE.get(type).value();
+    }
+
+    public static Collection<Holder<Item>> getRegisteredItems()
+    {
+        return TOOLS_BY_TYPE.values();
+    }
+
+    public static Item toolByType(FramedToolType type)
+    {
+        return TOOLS_BY_TYPE.get(type).value();
+    }
+
+    public static List<DeferredBlockEntity<? extends FramedBlockEntity>> getBlockEntities()
+    {
+        return FRAMED_BLOCK_ENTITIES;
+    }
+
+    public static List<DeferredBlockEntity<? extends FramedDoubleBlockEntity>> getDoubleBlockEntities()
+    {
+        return DOUBLE_BLOCK_ENTITIES;
+    }
+
+    private static Supplier<Block[]> getDefaultEntityBlocks()
+    {
+        //noinspection SuspiciousToArrayCall
+        return () -> BLOCKS_BY_TYPE.values()
+                .stream()
+                .map(Holder::value)
+                .filter(block -> block instanceof IFramedBlock)
+                .map(IFramedBlock.class::cast)
+                .filter(block -> !block.getBlockType().isDoubleBlock())
+                .filter(block -> !block.getBlockType().hasSpecialTile())
+                .toArray(Block[]::new);
+    }
+
+    private static Supplier<Block[]> getDefaultDoubleEntityBlocks()
+    {
+        //noinspection SuspiciousToArrayCall
+        return () -> BLOCKS_BY_TYPE.values()
+                .stream()
+                .map(Holder::value)
+                .filter(block -> block instanceof IFramedBlock)
+                .map(IFramedBlock.class::cast)
+                .filter(block -> block.getBlockType().isDoubleBlock())
+                .filter(block -> !block.getBlockType().hasSpecialTile())
+                .toArray(Block[]::new);
+    }
+
+    private static <T extends Block & IFramedBlock> Holder<Block> registerBlock(
+            Function<BlockType, T> blockFactory, BlockType type
+    )
+    {
+        return registerBlock(() -> blockFactory.apply(type), type);
+    }
+
+    private static <T extends Block & IFramedBlock> Holder<Block> registerBlock(
+            Supplier<T> blockFactory, BlockType type
+    )
+    {
+        RegistryHolder<Block, T> result = BLOCKS.register(type.getName(), () ->
+        {
+            T block = blockFactory.get();
+            Preconditions.checkArgument(block.getBlockType() == type);
+            return block;
+        });
+        BLOCKS_BY_TYPE.put(type, result);
+
+        if (type.hasBlockItem())
+        {
+            ITEMS.register(type.getName(), () ->
+                    ((IFramedBlock) result.value()).createBlockItem()
+            );
+        }
+
+        return result;
+    }
+
+    @SuppressWarnings("SameParameterValue")
+    private static Holder<Block> registerBlock(String name, Supplier<? extends Block> blockFactory)
+    {
+        RegistryHolder<Block, ? extends Block> result = BLOCKS.register(name, blockFactory);
+        ITEMS.register(name, () -> new BlockItem(result.value(), new Item.Properties()));
+        return result;
+    }
+
+    private static Holder<Item> registerToolItem(Function<FramedToolType, Item> itemFactory, FramedToolType type)
+    {
+        RegistryHolder<Item, Item> result = ITEMS.register(type.getName(), () -> itemFactory.apply(type));
+        TOOLS_BY_TYPE.put(type, result);
+        return result;
+    }
+
+    private static <T extends BlockEntity> DeferredBlockEntity<T> registerBlockEntity(
+            BlockEntityType.BlockEntitySupplier<T> factory, BlockType... types
+    )
+    {
+        Supplier<Block[]> blocks = () -> Arrays.stream(types)
+                .map(BLOCKS_BY_TYPE::get)
+                .map(Holder::value)
+                .toArray(Block[]::new);
+
+        DeferredBlockEntity<T> result = registerBlockEntity(factory, types[0].getName(), blocks, true);
+        if (FabricLoader.getInstance().isDevelopmentEnvironment() && Arrays.stream(types).anyMatch(BlockType::isDoubleBlock))
+        {
+            //noinspection unchecked
+            DOUBLE_BLOCK_ENTITIES.add((DeferredBlockEntity<? extends FramedDoubleBlockEntity>) result);
+        }
+        return result;
+    }
+
+    private static <T extends BlockEntity> DeferredBlockEntity<T> registerBlockEntity(
+            BlockEntityType.BlockEntitySupplier<T> factory, String name, Supplier<Block[]> blocks, boolean isFramedBE
+    )
+    {
+        DeferredBlockEntity<T> result = BE_TYPES.registerBlockEntity(name, factory, blocks);
+        if (isFramedBE)
+        {
+            //noinspection unchecked
+            FRAMED_BLOCK_ENTITIES.add((DeferredBlockEntity<? extends FramedBlockEntity>) result);
+        }
+        return result;
+    }
+
+    private static <T extends AbstractContainerMenu> RegistryHolder<MenuType<?>, MenuType<T>> registerSimpleMenuType(
+            MenuType.MenuSupplier<T> factory, String name
+    )
+    {
+        return CONTAINER_TYPES.register(name, () -> new MenuType<>(factory, FeatureFlags.VANILLA_SET));
+    }
+
+    private static <T extends AbstractContainerMenu> RegistryHolder<MenuType<?>, MenuType<T>> registerMenuType(
+            net.fabricmc.fabric.api.screenhandler.v1.ExtendedScreenHandlerType.ExtendedFactory<T> factory, String name
+    )
+    {
+        return CONTAINER_TYPES.register(name, () -> new ExtendedScreenHandlerType<>(factory, null));
+    }
+
+    @SuppressWarnings("SameParameterValue")
+    private static <T extends Recipe<?>> DeferredRecipeType<T> registerRecipeType(String name)
+    {
+        return RECIPE_TYPES.registerRecipeType(name);
+    }
+
+    private static <T extends Recipe<?>> DeferredRecipeSerializer<T> registerRecipeSerializer(
+            String name, MapCodec<T> codec, StreamCodec<RegistryFriendlyByteBuf, T> streamCodec
+    )
+    {
+        return RECIPE_SERIALIZERS.registerRecipeSerializer(name, codec, streamCodec);
+    }
+
+    @SuppressWarnings("SameParameterValue")
+    private static <O extends ParticleOptions> RegistryHolder<ParticleType<?>, ParticleType<O>> registerParticle(
+            String name, boolean overrideLimiter, MapCodec<O> codec, StreamCodec<? super RegistryFriendlyByteBuf, O> streamCodec
+    )
+    {
+        return PARTICLE_TYPES.register(name, () -> new BasicParticleType<>(overrideLimiter, codec, streamCodec));
+    }
+
+
+
+    private FBContent() { }
+}

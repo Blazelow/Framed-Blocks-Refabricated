@@ -1,0 +1,80 @@
+package xfacthd.framedblocks.common.data.skippreds.misc;
+
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import xfacthd.framedblocks.api.block.IFramedBlock;
+import xfacthd.framedblocks.api.predicate.cull.SideSkipPredicate;
+import xfacthd.framedblocks.common.data.BlockType;
+import xfacthd.framedblocks.common.data.PropertyHolder;
+import xfacthd.framedblocks.common.data.property.CornerTubeOrientation;
+import xfacthd.framedblocks.common.data.skippreds.CullTest;
+
+/**
+ This class is machine-generated, any manual changes to this class will be overwritten.
+ */
+@CullTest(BlockType.FRAMED_TUBE)
+public final class TubeSkipPredicate implements SideSkipPredicate
+{
+    @Override
+    public boolean test(BlockGetter level, BlockPos pos, BlockState state, BlockState adjState, Direction side)
+    {
+        Direction.Axis axis = state.getValue(BlockStateProperties.AXIS);
+        if (MiscDirs.Tube.testEarlyExit(axis, side))
+        {
+            return false;
+        }
+
+        if (adjState.getBlock() instanceof IFramedBlock block && block.getBlockType() instanceof BlockType blockType)
+        {
+            boolean thick = state.getValue(PropertyHolder.THICK);
+
+            return switch (blockType)
+            {
+                case FRAMED_TUBE -> testAgainstTube(
+                        axis, thick, adjState, side
+                );
+                case FRAMED_CORNER_TUBE -> testAgainstCornerTube(
+                        axis, thick, adjState, side
+                );
+                case FRAMED_HOPPER -> testAgainstHopper(
+                        axis, thick, side
+                );
+                default -> false;
+            };
+        }
+        return false;
+    }
+
+    @CullTest.TestTarget(BlockType.FRAMED_TUBE)
+    private static boolean testAgainstTube(
+            Direction.Axis axis, boolean thick, BlockState adjState, Direction side
+    )
+    {
+        Direction.Axis adjAxis = adjState.getValue(BlockStateProperties.AXIS);
+        boolean adjThick = adjState.getValue(PropertyHolder.THICK);
+
+        return MiscDirs.Tube.getOpeningDir(axis, thick, side).isEqualTo(MiscDirs.Tube.getOpeningDir(adjAxis, adjThick, side.getOpposite()));
+    }
+
+    @CullTest.TestTarget(BlockType.FRAMED_CORNER_TUBE)
+    private static boolean testAgainstCornerTube(
+            Direction.Axis axis, boolean thick, BlockState adjState, Direction side
+    )
+    {
+        CornerTubeOrientation adjOrientation = adjState.getValue(PropertyHolder.CORNER_TYPE_ORIENTATION);
+        boolean adjThick = adjState.getValue(PropertyHolder.THICK);
+
+        return MiscDirs.Tube.getOpeningDir(axis, thick, side).isEqualTo(MiscDirs.CornerTube.getOpeningDir(adjOrientation, adjThick, side.getOpposite()));
+    }
+
+    @CullTest.TestTarget(BlockType.FRAMED_HOPPER)
+    private static boolean testAgainstHopper(
+            Direction.Axis axis, boolean thick, Direction side
+    )
+    {
+        return MiscDirs.Tube.getOpeningDir(axis, thick, side).isEqualTo(MiscDirs.Hopper.getOpeningDir(side.getOpposite()));
+    }
+}

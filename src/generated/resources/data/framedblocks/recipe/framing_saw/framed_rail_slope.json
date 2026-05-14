@@ -1,0 +1,16 @@
+{
+  "type": "framedblocks:frame",
+  "additives": [
+    {
+      "count": 1,
+      "ingredient": {
+        "item": "minecraft:rail"
+      }
+    }
+  ],
+  "material": 3072,
+  "result": {
+    "count": 1,
+    "id": "framedblocks:framed_rail_slope"
+  }
+}

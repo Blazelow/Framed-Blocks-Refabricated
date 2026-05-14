@@ -1,0 +1,231 @@
+package xfacthd.framedblocks.common.block.interactive;
+
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.ItemInteractionResult;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.context.BlockPlaceContext;
+import net.minecraft.world.level.*;
+import net.minecraft.world.level.block.*;
+import net.minecraft.world.level.block.entity.*;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.StateDefinition;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import org.jetbrains.annotations.Nullable;
+import xfacthd.framedblocks.api.block.PlacementStateBuilder;
+import xfacthd.framedblocks.api.util.Utils;
+import xfacthd.framedblocks.common.FBContent;
+import xfacthd.framedblocks.common.block.FramedBlock;
+import xfacthd.framedblocks.common.blockentity.special.FramedItemFrameBlockEntity;
+import xfacthd.framedblocks.common.data.BlockType;
+import xfacthd.framedblocks.common.data.PropertyHolder;
+
+public class FramedItemFrameBlock extends FramedBlock
+{
+    @SuppressWarnings("deprecation")
+    private static final SoundType NORMAL_SOUND = new SoundType(
+            1F, 1F, SoundEvents.ITEM_FRAME_BREAK, SoundEvents.EMPTY, SoundEvents.ITEM_FRAME_PLACE, SoundEvents.SCAFFOLDING_HIT, SoundEvents.EMPTY
+    );
+    @SuppressWarnings("deprecation")
+    private static final SoundType GLOWING_SOUND = new SoundType(
+            1F, 1F, SoundEvents.GLOW_ITEM_FRAME_BREAK, SoundEvents.EMPTY, SoundEvents.GLOW_ITEM_FRAME_PLACE, SoundEvents.SCAFFOLDING_HIT, SoundEvents.EMPTY
+    );
+
+    public FramedItemFrameBlock(BlockType type)
+    {
+        super(type, props -> props
+                .instabreak()
+                .noCollission()
+                .isSuffocating((s, l, p) -> false)
+                .isViewBlocking((s, l, p) -> false)
+                .sound(type == BlockType.FRAMED_ITEM_FRAME ? NORMAL_SOUND : GLOWING_SOUND)
+        );
+        registerDefaultState(defaultBlockState()
+                .setValue(PropertyHolder.LEATHER, false)
+                .setValue(PropertyHolder.MAP_FRAME, false)
+        );
+    }
+
+    @Override
+    protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder)
+    {
+        super.createBlockStateDefinition(builder);
+        builder.add(BlockStateProperties.FACING, PropertyHolder.LEATHER, PropertyHolder.MAP_FRAME, BlockStateProperties.WATERLOGGED);
+    }
+
+    @Override
+    public BlockState getStateForPlacement(BlockPlaceContext ctx)
+    {
+        return PlacementStateBuilder.of(this, ctx)
+                .withTargetFacing()
+                .withWater()
+                .validate((state, modCtx) -> canSurvive(state, modCtx.getLevel(), modCtx.getClickedPos()))
+                .build();
+    }
+
+    @Override
+    protected BlockState updateShape(
+            BlockState state,
+            Direction direction,
+            BlockState neighborState,
+            LevelAccessor level,
+            BlockPos currentPos,
+            BlockPos neighborPos
+    )
+    {
+        if (!canSurvive(state, level, currentPos))
+        {
+            return Blocks.AIR.defaultBlockState();
+        }
+        return super.updateShape(state, direction, neighborState, level, currentPos, neighborPos);
+    }
+
+    @Override
+    protected boolean canSurvive(BlockState state, LevelReader level, BlockPos pos)
+    {
+        Direction dir = state.getValue(BlockStateProperties.FACING);
+        return Block.canSupportRigidBlock(level, pos.relative(dir));
+    }
+
+    @Override
+    protected ItemInteractionResult useItemOn(
+            ItemStack stack, BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit
+    )
+    {
+        ItemInteractionResult result = super.useItemOn(stack, state, level, pos, player, hand, hit);
+        if (result.consumesAction()) { return result; }
+
+        if (level.getBlockEntity(pos) instanceof FramedItemFrameBlockEntity be)
+        {
+            return be.handleFrameInteraction(player, hand);
+        }
+        return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
+    }
+
+    @Override
+    public boolean handleBlockLeftClick(BlockState state, Level level, BlockPos pos, Player player)
+    {
+        if (player.getMainHandItem().is(FBContent.ITEM_FRAMED_HAMMER.value()))
+        {
+            if (!level.isClientSide())
+            {
+                level.setBlockAndUpdate(pos, state.cycle(PropertyHolder.LEATHER));
+            }
+            return true;
+        }
+        else if (level.getBlockEntity(pos) instanceof FramedItemFrameBlockEntity be && be.hasItem())
+        {
+            if (!level.isClientSide())
+            {
+                be.removeItem(player);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    @SuppressWarnings("deprecation")
+    public SoundType getSoundType(BlockState state, LevelReader level, BlockPos pos, Entity entity)
+    {
+        //No camo sounds here
+        return getSoundType(state);
+    }
+
+    @Override
+    public boolean addLandingEffects(
+            BlockState state1,
+            ServerLevel level,
+            BlockPos pos,
+            BlockState state2,
+            LivingEntity entity,
+            int numberOfParticles
+    )
+    {
+        //Suppress landing impact particles
+        return true;
+    }
+
+    @Override
+    public boolean addRunningEffects(BlockState state, Level level, BlockPos pos, Entity entity)
+    {
+        //Suppress sprinting particles
+        return true;
+    }
+
+    @Override
+    public ItemStack getCloneItemStack(BlockState state, HitResult target, LevelReader level, BlockPos pos, Player player)
+    {
+        if (level.getBlockEntity(pos) instanceof FramedItemFrameBlockEntity be && be.hasItem())
+        {
+            return be.getCloneItem();
+        }
+        return super.getCloneItemStack(state, target, level, pos, player);
+    }
+
+    @Override
+    public BlockState rotate(BlockState state, Direction face, Rotation rot)
+    {
+        //Not rotatable by wrench
+        return state;
+    }
+
+    @Override
+    protected BlockState rotate(BlockState state, Rotation rot)
+    {
+        Direction dir = state.getValue(BlockStateProperties.FACING);
+        return state.setValue(BlockStateProperties.FACING, rot.rotate(dir));
+    }
+
+    @Override
+    protected BlockState mirror(BlockState state, Mirror mirror)
+    {
+        return Utils.mirrorFaceBlock(state, BlockStateProperties.FACING, mirror);
+    }
+
+    @Override
+    public BlockEntity newBlockEntity(BlockPos pos, BlockState state)
+    {
+        return new FramedItemFrameBlockEntity(pos, state);
+    }
+
+    @Nullable
+    @Override
+    public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type)
+    {
+        if (!level.isClientSide() && state.getValue(PropertyHolder.MAP_FRAME))
+        {
+            return Utils.createBlockEntityTicker(
+                    type, FBContent.BE_TYPE_FRAMED_ITEM_FRAME.value(), (l, p, s, be) -> be.tickWithMap()
+            );
+        }
+        return null;
+    }
+
+    @Override
+    @Nullable
+    public BlockState getItemModelSource()
+    {
+        return null;
+    }
+
+    @Override
+    public BlockState getJadeRenderState(BlockState state)
+    {
+        return state.setValue(BlockStateProperties.FACING, Direction.SOUTH);
+    }
+
+    @Override
+    public float getJadeRenderScale(BlockState state)
+    {
+        return 1.3F;
+    }
+}
