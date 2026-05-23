@@ -139,6 +139,6 @@ public class FramedChainBlock extends ChainBlock implements IFramedBlock
     @Override
     public MapCodec<ChainBlock> codec()
     {
-        throw new UnsupportedOperationException();
+        return ChainBlock.CODEC;
     }
 }

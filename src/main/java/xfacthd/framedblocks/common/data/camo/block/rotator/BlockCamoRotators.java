@@ -20,7 +20,6 @@ import xfacthd.framedblocks.api.camo.block.AbstractBlockCamoContainerFactory;
 import xfacthd.framedblocks.api.camo.block.rotator.BlockCamoRotator;
 import xfacthd.framedblocks.api.camo.block.rotator.RegisterBlockCamoRotatorsEvent;
 import xfacthd.framedblocks.api.camo.block.rotator.SimpleBlockCamoRotator;
-import xfacthd.framedblocks.common.data.FramedDataMaps;
 import xfacthd.framedblocks.common.data.camo.CamoContainerFactories;
 
 public final class BlockCamoRotators
@@ -74,30 +73,25 @@ public final class BlockCamoRotators
         });
         int defaultCount = ROTATORS.size();
 
+        // Fire the custom rotator registration event via Fabric entrypoints
         MutableInt customCount = new MutableInt();
-        NeoForge.EVENT_BUS.post(new RegisterBlockCamoRotatorsEvent((key, value) ->
+        RegisterBlockCamoRotatorsEvent event = new RegisterBlockCamoRotatorsEvent((key, value) ->
         {
             ROTATORS.put(key, value);
             customCount.increment();
-        }));
-
-        MutableInt datapackCount = new MutableInt();
-        BuiltInRegistries.BLOCK.getDataMap(FramedDataMaps.BLOCK_CAMO_ROTATORS).forEach((key, prototype) ->
-        {
-            Block block = BuiltInRegistries.BLOCK.getOrThrow(key);
-            if (!prototype.isApplicableTo(block))
-            {
-                LOGGER.error("BlockCamoRotator for property {} from datamap cannot be applied to {}, dropping!", prototype.property(), block);
-                return;
-            }
-
-            ROTATORS.put(block, prototype.build(block));
-            datapackCount.increment();
         });
+        net.fabricmc.loader.api.FabricLoader.getInstance()
+                .getEntrypoints("framedblocks:register_block_camo_rotators",
+                        java.util.function.Consumer.class)
+                .forEach(ep -> //noinspection unchecked
+                        ((java.util.function.Consumer<RegisterBlockCamoRotatorsEvent>) ep).accept(event));
+
+        // DataMap (NeoForge-only feature) is not available on Fabric; datapack rotators are not supported yet.
+        int datapackCount = 0;
         stopwatch.stop();
         int totalCount = ROTATORS.size();
 
-        LOGGER.debug("Collected {} camo rotators ({} default, {} custom, {} datamap) in {}", totalCount, defaultCount, customCount.intValue(), datapackCount.intValue(), stopwatch);
+        LOGGER.debug("Collected {} camo rotators ({} default, {} custom, {} datamap) in {}", totalCount, defaultCount, customCount.intValue(), datapackCount, stopwatch);
     }
 
     private static void addIfPropPresent(Block block, Property<?> property, BlockCamoRotator rotator)

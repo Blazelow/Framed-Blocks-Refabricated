@@ -33,23 +33,33 @@ public record BlueprintData(
             BlockItemStateProperties.CODEC.optionalFieldOf("blockstate", BlockItemStateProperties.EMPTY).forGetter(BlueprintData::blockState),
             AuxBlueprintData.CODEC.optionalFieldOf("aux_data").forGetter(BlueprintData::auxData)
     ).apply(inst, BlueprintData::new));
-    public static final StreamCodec<RegistryFriendlyByteBuf, BlueprintData> STREAM_CODEC = NeoForgeStreamCodecs.composite(
-            ByteBufCodecs.registry(Registries.BLOCK),
-            BlueprintData::block,
-            CamoList.STREAM_CODEC,
-            BlueprintData::camos,
-            ByteBufCodecs.BOOL,
-            BlueprintData::glowing,
-            ByteBufCodecs.BOOL,
-            BlueprintData::intangible,
-            ByteBufCodecs.BOOL,
-            BlueprintData::reinforced,
-            BlockItemStateProperties.STREAM_CODEC,
-            BlueprintData::blockState,
-            ByteBufCodecs.optional(AuxBlueprintData.STREAM_CODEC),
-            BlueprintData::auxData,
-            BlueprintData::new
-    );
+    public static final StreamCodec<RegistryFriendlyByteBuf, BlueprintData> STREAM_CODEC = new StreamCodec<>()
+    {
+        @Override
+        public BlueprintData decode(RegistryFriendlyByteBuf buf)
+        {
+            Block block = ByteBufCodecs.registry(Registries.BLOCK).decode(buf);
+            CamoList camos = CamoList.STREAM_CODEC.decode(buf);
+            boolean glowing = ByteBufCodecs.BOOL.decode(buf);
+            boolean intangible = ByteBufCodecs.BOOL.decode(buf);
+            boolean reinforced = ByteBufCodecs.BOOL.decode(buf);
+            BlockItemStateProperties blockState = BlockItemStateProperties.STREAM_CODEC.decode(buf);
+            Optional<AuxBlueprintData<?>> auxData = ByteBufCodecs.<RegistryFriendlyByteBuf, AuxBlueprintData<?>>optional(AuxBlueprintData.STREAM_CODEC).decode(buf);
+            return new BlueprintData(block, camos, glowing, intangible, reinforced, blockState, auxData);
+        }
+
+        @Override
+        public void encode(RegistryFriendlyByteBuf buf, BlueprintData value)
+        {
+            ByteBufCodecs.registry(Registries.BLOCK).encode(buf, value.block());
+            CamoList.STREAM_CODEC.encode(buf, value.camos());
+            ByteBufCodecs.BOOL.encode(buf, value.glowing());
+            ByteBufCodecs.BOOL.encode(buf, value.intangible());
+            ByteBufCodecs.BOOL.encode(buf, value.reinforced());
+            BlockItemStateProperties.STREAM_CODEC.encode(buf, value.blockState());
+            ByteBufCodecs.<RegistryFriendlyByteBuf, AuxBlueprintData<?>>optional(AuxBlueprintData.STREAM_CODEC).encode(buf, value.auxData());
+        }
+    };
     public static final BlueprintData EMPTY = new BlueprintData(Blocks.AIR, CamoList.EMPTY, false, false, false, BlockItemStateProperties.EMPTY, Optional.empty());
 
     @Deprecated(forRemoval = true)

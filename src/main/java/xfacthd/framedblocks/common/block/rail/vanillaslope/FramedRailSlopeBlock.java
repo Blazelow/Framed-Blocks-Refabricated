@@ -249,7 +249,8 @@ public class FramedRailSlopeBlock extends BaseRailBlock implements IFramedBlock,
     @Override
     protected MapCodec<? extends BaseRailBlock> codec()
     {
-        throw new UnsupportedOperationException("NO");
+        // FramedRailSlopeBlock is not registered in vanilla's codec dispatch; suppress codec lookup
+        return com.mojang.serialization.MapCodec.assumeMapUnsafe(com.mojang.serialization.Codec.unit(this));
     }
 
     @Override
