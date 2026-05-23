@@ -90,15 +90,21 @@ public final class BlockOutlineRenderer
 
     public static void init()
     {
-        /* TODO (Step 7): fire RegisterOutlineRenderersEvent( */ new RegisterOutlineRenderersEvent((type, renderer) ->
-        {
-            Preconditions.checkArgument(
-                    type.hasSpecialHitbox(),
-                    "IBlockType %s doesn't return true from IBlockType#hasSpecialHitbox()",
-                    type
-            );
-            OUTLINE_RENDERERS.put(type, renderer);
-        }));
+        xfacthd.framedblocks.api.render.RegisterOutlineRenderersEvent event =
+                new xfacthd.framedblocks.api.render.RegisterOutlineRenderersEvent((type, renderer) ->
+                {
+                    Preconditions.checkArgument(
+                            type.hasSpecialHitbox(),
+                            "IBlockType %s doesn't return true from IBlockType#hasSpecialHitbox()",
+                            type
+                    );
+                    OUTLINE_RENDERERS.put(type, renderer);
+                });
+        net.fabricmc.loader.api.FabricLoader.getInstance()
+                .getEntrypoints("framedblocks:register_outline_renderers",
+                        java.util.function.Consumer.class)
+                .forEach(ep -> //noinspection unchecked
+                        ((java.util.function.Consumer<xfacthd.framedblocks.api.render.RegisterOutlineRenderersEvent>) ep).accept(event));
     }
 
     public static boolean hasOutlineRenderer(IBlockType type)

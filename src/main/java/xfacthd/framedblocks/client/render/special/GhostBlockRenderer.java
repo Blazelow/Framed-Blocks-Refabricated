@@ -234,7 +234,7 @@ public final class GhostBlockRenderer
 
     public static void init()
     {
-        /* TODO (Step 7): fire RegisterGhostRenderBehavioursEvent( */ new RegisterGhostRenderBehavioursEvent(
+        RegisterGhostRenderBehavioursEvent event = new RegisterGhostRenderBehavioursEvent(
                 (behaviour, blocks) ->
                 {
                     Preconditions.checkNotNull(behaviour, "GhostRenderBehaviour must be non-null");
@@ -258,7 +258,12 @@ public final class GhostBlockRenderer
                         RENDER_BEHAVIOURS.put(item, behaviour);
                     }
                 }
-        ));
+        );
+        net.fabricmc.loader.api.FabricLoader.getInstance()
+                .getEntrypoints("framedblocks:register_ghost_render_behaviours",
+                        java.util.function.Consumer.class)
+                .forEach(ep -> //noinspection unchecked
+                        ((java.util.function.Consumer<RegisterGhostRenderBehavioursEvent>) ep).accept(event));
     }
 
     public static GhostRenderBehaviour getBehaviour(Item item)

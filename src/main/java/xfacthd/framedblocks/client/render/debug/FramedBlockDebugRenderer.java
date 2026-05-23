@@ -66,9 +66,14 @@ public final class FramedBlockDebugRenderer
     {
         if (!FabricLoader.getInstance().isDevelopmentEnvironment()) return;
 
-        /* TODO (Step 7): fire AttachDebugRenderersEvent( */ new AttachDebugRenderersEvent((type, renderer) ->
+        AttachDebugRenderersEvent event = new AttachDebugRenderersEvent((type, renderer) ->
                 RENDERERS_BY_TYPE.computeIfAbsent(type, $ -> new ReferenceOpenHashSet<>()).add(renderer)
-        ));
+        );
+        net.fabricmc.loader.api.FabricLoader.getInstance()
+                .getEntrypoints("framedblocks:attach_debug_renderers",
+                        java.util.function.Consumer.class)
+                .forEach(ep -> //noinspection unchecked
+                        ((java.util.function.Consumer<AttachDebugRenderersEvent>) ep).accept(event));
 
         net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents.START.register(
                 FramedBlockDebugRenderer::onRenderFramePre);

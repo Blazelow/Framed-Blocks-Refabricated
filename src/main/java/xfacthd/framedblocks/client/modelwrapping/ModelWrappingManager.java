@@ -93,7 +93,12 @@ public final class ModelWrappingManager
                     "Block", "Unhandled properties", "Handled or ignored properties"
             ));
         }
-        /* TODO (Step 7): fire RegisterModelWrappersEvent( */ new RegisterModelWrappersEvent());
+        RegisterModelWrappersEvent event = new RegisterModelWrappersEvent();
+        net.fabricmc.loader.api.FabricLoader.getInstance()
+                .getEntrypoints("framedblocks:register_model_wrappers",
+                        java.util.function.Consumer.class)
+                .forEach(ep -> //noinspection unchecked
+                        ((java.util.function.Consumer<RegisterModelWrappersEvent>) ep).accept(event));
         if (debugLogging)
         {
             FramedBlocks.LOGGER.info("=============== Model Wrapper Registration End =================");
