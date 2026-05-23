@@ -299,34 +299,6 @@ public class FramedHopperBlockEntity extends FramedBlockEntity implements Hopper
 
 
 
-    public final class ItemHandler extends InvWrapper
-    {
-        public ItemHandler()
-        {
-            super(FramedHopperBlockEntity.this);
-        }
-
-        /** @see VanillaHopperItemHandler */
-        @Override
-        public ItemStack insertItem(int slot, ItemStack stack, boolean simulate)
-        {
-            if (simulate)
-            {
-                return super.insertItem(slot, stack, true);
-            }
-
-            boolean wasEmpty = getInv().isEmpty();
-            int originalStackSize = stack.getCount();
-            stack = super.insertItem(slot, stack, false);
-            if (wasEmpty && originalStackSize > stack.getCount() && !isOnCustomCooldown())
-            {
-                setCooldown(HopperBlockEntity.MOVE_ITEM_SPEED);
-            }
-            return stack;
-        }
-    }
-
-    @FunctionalInterface
     /**
      * Inner class exposed as the item handler for the hopper's inventory.
      * Used by {@link xfacthd.framedblocks.common.data.capabilities.CapabilitySetup}.

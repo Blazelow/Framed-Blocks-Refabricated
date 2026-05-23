@@ -20,12 +20,12 @@ import java.util.stream.Stream;
  * Before registration completes the holder is in an "unbound" state — calling
  * {@link #value()} before {@code FabricRegistrar.registerAll()} will throw.
  */
-public final class RegistryHolder<R, T extends R> implements Holder<T>
+public class RegistryHolder<R, T extends R> implements Holder<T>
 {
     private final ResourceKey<R> key;
     private Holder.Reference<T> delegate;
 
-    RegistryHolder(ResourceKey<R> key)
+    protected RegistryHolder(ResourceKey<R> key)
     {
         this.key = key;
     }
